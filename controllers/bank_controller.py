@@ -13,7 +13,7 @@ class BankController:
         for user in users:
             existing_acc = [*(acc for acc in accounts if acc.user_id == user.id)]
             if existing_acc:
-                result = [(f'Number: {acc.account_number}, Balance: {acc.balance}, IR: {acc.interest_rate}') for acc in existing_acc]
+                result = [(f'Number: {acc.account_number}, Balance: {acc.balance}, IR: {acc.interest_rate} Created at: {acc.timestamp}') for acc in existing_acc]
             else:
                 result = 'No account'
             print(f'User: {user.name}, Account: {result}')

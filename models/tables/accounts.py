@@ -1,3 +1,4 @@
+#models/tables/accounts.py
 class Accounts:
     def __init__(self, id=None, account_number=None, balance=None, interest_rate=None, user_id=None, timestamp=None):
         self.id = id
