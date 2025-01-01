@@ -9,8 +9,7 @@ class CLIView:
     Options:
         lsa:\tAccounts List
         lsu:\tUsers List
-        tinf:\tTables columns Info
-        au:\tAdd User
+        cu:\tCreate User
         du:\tDelete User
         ui:\tUser Info
         ca:\tCreate Account
