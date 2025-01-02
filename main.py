@@ -10,9 +10,12 @@ def main(db_file):
     info = Info()
     controller = ModelController(db)
 
- # The more functions...
+    # The more functions...
+    # For example:
+    print(info.table_colnames, info.table_info)
+    # and other functions from the model_controller.py 
 
- if __name__ == '__main__':
+if __name__ == '__main__':
     # Argumentumok beolvasása
     parser = argparse.ArgumentParser(description="Main script.")
     parser.add_argument("--db_file", type=str, help="Az adatbázis fájl elérési útja.")

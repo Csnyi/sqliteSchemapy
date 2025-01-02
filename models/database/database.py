@@ -29,7 +29,6 @@ class Database:
                 query = f"PRAGMA table_info({table});"
                 columns = self.fetchall(query)
                 table_info[table] = [{'name': col['name'], 'type': col['type'], 'notnull': col['notnull'], 'dflt_value': col['dflt_value'], 'pk': col['pk']} for col in columns]
-                #table_info[table] = [(col['name'], col['type'], col['notnull'], col['dflt_value'], col['pk']) for col in columns]
         return table_info
     
     def get_sql(self):

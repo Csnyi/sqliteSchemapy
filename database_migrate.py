@@ -27,11 +27,11 @@ def main(db_file, info_file, model_file, controller_file, main_file, dump_file):
     for table, columns in table_info.items():
         class_name = table.capitalize()
         file = f'{model_file}{table}.py'
-        attributes = table_colnames[table]
-        init_args = ', '.join([f"{col}=None" for col in attributes])
-        fetch_col = ', '.join([f"{col}" for col in attributes])
-        init_body = '\n                        '.join(f"self.{col} = {col}" for col in attributes)
+        attributes = tuple(col['name'] for col in columns)
+        init_args = ', '.join([f"{arg}=None" for arg in attributes])
+        init_body = '\n                        '.join(f"self.{arg} = {arg}" for arg in attributes)
         attrs = ", ".join([f"{attr}={{self.{attr}!r}}" for attr in attributes])
+        fetch_col = ', '.join([f"{col}" for col in attributes])
         update_set = ", ".join([f"{attr} = ?" for attr in attributes if attr != 'id'])
         update_param = ", ".join([f"self.{attr}" for attr in attributes if attr != 'id'])
         insert_set = ", ".join(attributes)
@@ -77,19 +77,14 @@ def main(db_file, info_file, model_file, controller_file, main_file, dump_file):
             ''')
             f.write(content)
     
-    #from_controller = ''
-    #for table in table_info:
-        #class_name = table.capitalize()
-        #path = model_file.replace('/', '.')
-        #from_controller += f'           from {path}{table} import {class_name}\n'
     path = model_file.replace('/', '.')
-    from_controller = '\n            '.join(f"from {path}{table} import {table.capitalize()}" for table in table_info)
+    from_model = '\n            '.join(f"from {path}{table} import {table.capitalize()}" for table in table_info)
 
     with open(controller_file, 'w') as f:
         content = textwrap.dedent(f'''\
             # {controller_file}
             import datetime
-            {from_controller}
+            {from_model}
             
             class ModelController:
                 def __init__(self, db):
@@ -99,7 +94,7 @@ def main(db_file, info_file, model_file, controller_file, main_file, dump_file):
         f.write(content)
 
     from_info = info_file.replace('/', '.')[:-3]
-    from_main = controller_file.replace('/', '.')[:-3]
+    from_controllers = controller_file.replace('/', '.')[:-3]
 
     with open(main_file, 'w') as f:
         content = textwrap.dedent(f'''\
@@ -108,7 +103,7 @@ def main(db_file, info_file, model_file, controller_file, main_file, dump_file):
             import configparser
             from models.database.database import Database
             from {from_info} import Info
-            from {from_main} import ModelController
+            from {from_controllers} import ModelController
 
             def main(db_file):
                 db = Database(db_file)
