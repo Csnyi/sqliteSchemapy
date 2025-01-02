@@ -77,21 +77,24 @@ def main(db_file, info_file, model_file, controller_file, main_file, dump_file):
             ''')
             f.write(content)
     
-    from_controller = ''
-    for table in table_info:
-        class_name = table.capitalize()
-        path = model_file.replace('/', '.')
-        from_controller += f'from {path}{table} import {class_name}\n'
-    
+    #from_controller = ''
+    #for table in table_info:
+        #class_name = table.capitalize()
+        #path = model_file.replace('/', '.')
+        #from_controller += f'           from {path}{table} import {class_name}\n'
+    path = model_file.replace('/', '.')
+    from_controller = '\n            '.join(f"from {path}{table} import {table.capitalize()}" for table in table_info)
+
     with open(controller_file, 'w') as f:
         content = textwrap.dedent(f'''\
-# {controller_file}
-import datetime
-{from_controller}
-class ModelController:
-    def __init__(self, db):
-        self.db = db
+            # {controller_file}
+            import datetime
+            {from_controller}
             
+            class ModelController:
+                def __init__(self, db):
+                    self.db = db
+                        
         ''')
         f.write(content)
 
@@ -100,37 +103,40 @@ class ModelController:
 
     with open(main_file, 'w') as f:
         content = textwrap.dedent(f'''\
-# {main_file}
-import argparse
-import configparser
-from models.database.database import Database
-from {from_info} import Info
-from {from_main} import ModelController
+            # {main_file}
+            import argparse
+            import configparser
+            from models.database.database import Database
+            from {from_info} import Info
+            from {from_main} import ModelController
 
-def main(db_file):
-    db = Database(db_file)
-    info = Info()
-    controller = ModelController(db)
- 
- # The more functions...
- 
- if __name__ == '__main__':
-    # Argumentumok beolvasása
-    parser = argparse.ArgumentParser(description="Main script.")
-    parser.add_argument("--db_file", type=str, help="Az adatbázis fájl elérési útja.")
-    parser.add_argument("--config", type=str, default="config_migrate.ini", help="A konfigurációs fájl elérési útja.")
+            def main(db_file):
+                db = Database(db_file)
+                info = Info()
+                controller = ModelController(db)
+            
+                # The more functions...
+                # For example:
+                print(info.table_colnames, info.table_info)
+                # and other functions from the model_controller.py 
+            
+            if __name__ == '__main__':
+                # Argumentumok beolvasása
+                parser = argparse.ArgumentParser(description="Main script.")
+                parser.add_argument("--db_file", type=str, help="Az adatbázis fájl elérési útja.")
+                parser.add_argument("--config", type=str, default="config_migrate.ini", help="A konfigurációs fájl elérési útja.")
 
-    args = parser.parse_args()
+                args = parser.parse_args()
 
-    # Konfigurációs fájl beolvasása
-    config = configparser.ConfigParser()
-    config.read(args.config)
+                # Konfigurációs fájl beolvasása
+                config = configparser.ConfigParser()
+                config.read(args.config)
 
-    # Argumentumok vagy konfigurációs fájl használata
-    db_file = args.db_file or config["Paths"]["db_file"]
+                # Argumentumok vagy konfigurációs fájl használata
+                db_file = args.db_file or config["Paths"]["db_file"]
 
-    main(db_file)
- 
+                main(db_file)
+
         ''')
         f.write(content)
 
