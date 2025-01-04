@@ -1,7 +1,7 @@
 #controllers/bank_controller.py
 import datetime
-from models.tables.accounts import Accounts
-from models.tables.users import Users
+from models.tables.accounts_example import Accounts
+from models.tables.users_example import Users
 
 class BankController:
     def __init__(self, db):

@@ -7,8 +7,18 @@ class CLIView:
     def display_menu():
         print(f'''
     Options:
-        accounts-list:\tAccounts List
-        users-list:\tUsers List
+        lsa:\tAccounts List
+        lsu:\tUsers List
+        cu:\tCreate User
+        du:\tDelete User
+        ui:\tUser Info
+        ca:\tCreate Account
+        d:\tDeposit
+        w:\tWithdraw
+        t:\tTransfer
+        da:\tDelete Account
+        ai:\tAccounz Info
+        ir:\tInterest Rate
         cls:\tClear Screen
         q:\tQuit
         ''')
