@@ -2,8 +2,8 @@ import argparse
 import configparser
 from models.database.database import Database
 from models.tables_info import Info
-from controllers.bank_controller import BankController
-from views.cli_view import CLIView
+from controllers.example_controller import BankController
+from views.cli_view_ import CLIView
 
 def main(db_file):
     db = Database(db_file)
