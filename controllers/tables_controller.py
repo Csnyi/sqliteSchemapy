@@ -10,21 +10,20 @@ class TablesController:
         self.db = db
         self.info = Info()
 
-    def accounts_list(self):
-        accounts = Accounts.fetch_all(self.db)
-        header = [*(colname for colname in self.info.table_colnames["accounts"])]
+    def get_list(self, db_name):
+        class_name = db_name.capitalize()
+        rows = globals().get(class_name).fetch_all(self.db)
+        header = [*(colname for colname in self.info.table_colnames[db_name])]
         table = [header]
-        tablerows = [[getattr(col, attr) for attr in header] for col in accounts]
+        tablerows = [[getattr(row, attr) for attr in header] for row in rows]
         table.extend(tablerows)
         print(tabulate(table, headers="firstrow"))
 
+    def accounts_list(self):
+        self.get_list("accounts")
+
     def users_list(self):
-        users = Users.fetch_all(self.db)
-        header = [*(colname for colname in self.info.table_colnames["users"])]
-        table = [header]
-        tablerows = [[getattr(col, attr) for attr in header] for col in users]
-        table.extend(tablerows)
-        print(tabulate(table, headers="firstrow"))
+        self.get_list("users")
 
 
 

@@ -7,8 +7,8 @@ class CLIView:
     def display_menu():
         print(f'''
     Options:
-        accl:\tAccounts List
-        usel:\tUsers List
+        accol:\tAccounts List
+        userl:\tUsers List
         cls:\tClear Screen
         q:\tQuit
     ''')

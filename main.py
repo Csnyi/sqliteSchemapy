@@ -19,10 +19,18 @@ def main(db_file):
         if ch == "cls":
             view.cls()
 
-        elif ch == "accl":
-            controller.accounts_list()
-        elif ch == "usel":
-            controller.users_list()
+        elif ch == "accol":
+            try:
+                controller.accounts_list()
+            except Exception as error:
+                print(f"\n{str(error)}")
+
+        elif ch == "userl":
+            try:
+                controller.users_list()
+            except Exception as error:
+                print(f"\n{str(error)}")
+
 
         elif ch == "q":
             db.close()

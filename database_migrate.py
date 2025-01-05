@@ -91,19 +91,18 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
         class_name = table_name.capitalize()
         list_functions += textwrap.dedent(f'''\
             def {table_name}_list(self):
-                {"":>16}{table_name} = {class_name}.fetch_all(self.db)
-                {"":>16}header = [*(colname for colname in self.info.table_colnames["{table_name}"])]
-                {"":>16}table = [header]
-                {"":>16}tablerows = [[getattr(col, attr) for attr in header] for col in {table_name}]
-                {"":>16}table.extend(tablerows)
-                {"":>16}print(tabulate(table, headers="firstrow"))
+                {"":>16}self.get_list("{table_name}")
 
         ''')
         list_functions += f'''{"":>16}'''
-        option = table_name[:3]
+        option = table_name[:4]
         elif_list += textwrap.dedent(f'''\
             elif ch == "{option}l":
-                {"":>20}controller.{table_name}_list()
+                {"":>20}try:
+                    {"":>20}controller.{table_name}_list()
+                {"":>20}except Exception as error:
+                    {"":>20}print(f"\\n{{str(error)}}")
+                    
         ''')
         elif_list += f'''{"":>20}'''
         display_menu += f'''\
@@ -126,6 +125,15 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                 def __init__(self, db):
                     self.db = db
                     self.info = Info()
+
+                def get_list(self, db_name):
+                    class_name = db_name.capitalize()
+                    rows = globals().get(class_name).fetch_all(self.db)
+                    header = [*(colname for colname in self.info.table_colnames[db_name])]
+                    table = [header]
+                    tablerows = [[getattr(row, attr) for attr in header] for row in rows]
+                    table.extend(tablerows)
+                    print(tabulate(table, headers="firstrow"))
 
                 {list_functions}
                 
