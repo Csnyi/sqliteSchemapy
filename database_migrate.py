@@ -9,22 +9,9 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
     # table info: (id, name, type, notnull, default_value, pk)
     table_info = db.get_table_info()
     table_colnames = {table: tuple(col['name'] for col in columns) for table, columns in table_info.items()}
-    
-    with open(info_file, 'w') as f:
-        content = textwrap.dedent(f"""\
-            class Info: 
-                def __init__(self):
-                    self.table_colnames = dict()
-                    self.table_info = dict()
-                    self.table_sql = dict()
-
-                    self.table_colnames = {table_colnames}
-                    self.table_info = {table_info}
-                    self.table_sql = {tabel_sql}
-        """)
-        f.write(content)
 
     for table, columns in table_info.items():
+        # variable for model_file
         class_name = table.capitalize()
         model_file = f'{model_path}{table}.py'
         attributes = tuple(col['name'] for col in columns)
@@ -81,7 +68,9 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
     path = model_path.replace('/', '.')
     from_model = '\n            '.join(f"from {path}{table} import {table.capitalize()}" for table in table_info)
     table_names = [*(table for table in table_info)]
+    dict_timestamp = dict()
     list_functions = ""
+    add_functions = ""
     elif_list = ""
     display_menu = textwrap.dedent(f'''\
         print(f\'\'\'
@@ -89,29 +78,54 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
     ''')
     for table_name in table_names:
         class_name = table_name.capitalize()
+        dict_timestamp[table_name] = ""
         list_functions += textwrap.dedent(f'''\
             def {table_name}_list(self):
                 {"":>16}self.get_list("{table_name}")
 
         ''')
         list_functions += f'''{"":>16}'''
+        add_functions += textwrap.dedent(f'''\
+            def add_data_{table_name}(self):
+                {"":>16}self.add_data("{table_name}")
+
+        ''')
+        add_functions += f'''{"":>16}'''
         option = table_name[:4]
         elif_list += textwrap.dedent(f'''\
-            elif ch == "{option}l":
+            elif choice == "{option}l":
                 {"":>20}try:
                     {"":>20}controller.{table_name}_list()
+                {"":>20}except Exception as error:
+                    {"":>20}print(f"\\n{{str(error)}}")
+
+            {"":>20}elif choice == "c{option}":
+                {"":>20}try:
+                    {"":>20}controller.add_data_{table_name}()
                 {"":>20}except Exception as error:
                     {"":>20}print(f"\\n{{str(error)}}")
                     
         ''')
         elif_list += f'''{"":>20}'''
         display_menu += f'''\
-            {"":>8}{option}l:\\t{class_name} List\n'''
+            {"":>8}{option}l:\\t{class_name} List
+            {"":>8}c{option}:\\tCreate {class_name}\n'''
 
     display_menu += f'''\
         {"":>12}cls:\\tClear Screen
         {"":>12}q:\\tQuit
         {"":>8}\'\'\')'''
+    
+    with open(info_file, 'w') as f:
+        content = textwrap.dedent(f"""\
+            class Info: 
+                def __init__(self):
+                    self.table_colnames = {table_colnames}
+                    self.table_info = {table_info}
+                    self.table_sql = {tabel_sql}
+                    self.table_timestamps = {dict_timestamp}
+        """)
+        f.write(content)
 
     with open(controller_file, 'w') as f:
         content = textwrap.dedent(f'''\
@@ -135,7 +149,26 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                     table.extend(tablerows)
                     print(tabulate(table, headers="firstrow"))
 
+                def add_data(self, db_table_name):
+                    colnames = [*(colname for colname in self.info.table_colnames[db_table_name])]
+                    params = dict()
+                    for col in colnames:
+                        if col == "id":
+                            continue
+                        elif col in self.info.table_timestamps[db_table_name]:
+                            params[col] = datetime.datetime.now()
+                        else:
+                            params[col] = input(f"{{col.capitalize()}}: ")
+                    class_name = db_table_name.capitalize()
+                    cls = globals().get(class_name)
+                    if not cls:
+                        raise Exception(f"The {{class_name}} does not exist")
+                    table = cls(**params)
+                    table.save(self.db)
+                    print("The data have been added!")
+
                 {list_functions}
+                {add_functions}
                 
         ''')
         f.write(content)
@@ -189,13 +222,13 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                 # For example:
                 while True:
                     view.display_menu()
-                    ch = input("Option: ")
+                    choice = input("Option: ")
 
-                    if ch == "cls":
+                    if choice == "cls":
                         view.cls()
 
                     {elif_list}
-                    elif ch == "q":
+                    elif choice == "q":
                         db.close()
                         view.cls()
                         print("Goodby!")

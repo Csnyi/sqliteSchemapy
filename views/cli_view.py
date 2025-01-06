@@ -8,7 +8,9 @@ class CLIView:
         print(f'''
     Options:
         accol:\tAccounts List
+        cacco:\tCreate Accounts
         userl:\tUsers List
+        cuser:\tCreate Users
         cls:\tClear Screen
         q:\tQuit
     ''')

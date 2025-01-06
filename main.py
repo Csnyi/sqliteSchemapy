@@ -14,25 +14,37 @@ def main(db_file):
     # For example:
     while True:
         view.display_menu()
-        ch = input("Option: ")
+        choice = input("Option: ")
 
-        if ch == "cls":
+        if choice == "cls":
             view.cls()
 
-        elif ch == "accol":
+        elif choice == "accol":
             try:
                 controller.accounts_list()
             except Exception as error:
                 print(f"\n{str(error)}")
 
-        elif ch == "userl":
+        elif choice == "cacco":
+            try:
+                controller.add_data_accounts()
+            except Exception as error:
+                print(f"\n{str(error)}")
+
+        elif choice == "userl":
             try:
                 controller.users_list()
             except Exception as error:
                 print(f"\n{str(error)}")
 
+        elif choice == "cuser":
+            try:
+                controller.add_data_users()
+            except Exception as error:
+                print(f"\n{str(error)}")
 
-        elif ch == "q":
+
+        elif choice == "q":
             db.close()
             view.cls()
             print("Goodby!")

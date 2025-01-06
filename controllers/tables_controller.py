@@ -19,11 +19,36 @@ class TablesController:
         table.extend(tablerows)
         print(tabulate(table, headers="firstrow"))
 
+    def add_data(self, db_table_name):
+        colnames = [*(colname for colname in self.info.table_colnames[db_table_name])]
+        params = dict()
+        for col in colnames:
+            if col == "id":
+                continue
+            elif col in self.info.table_timestamps[db_table_name]:
+                params[col] = datetime.datetime.now()
+            else:
+                params[col] = input(f"{col.capitalize()}: ")
+        class_name = db_table_name.capitalize()
+        cls = globals().get(class_name)
+        if not cls:
+            raise Exception(f"The {class_name} does not exist")
+        table = cls(**params)
+        table.save(self.db)
+        print("The data have been added!")
+
     def accounts_list(self):
         self.get_list("accounts")
 
     def users_list(self):
         self.get_list("users")
+
+
+    def add_data_accounts(self):
+        self.add_data("accounts")
+
+    def add_data_users(self):
+        self.add_data("users")
 
 
 
