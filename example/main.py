@@ -1,4 +1,4 @@
-# main.py
+# main.py example
 import argparse
 import configparser
 from validation.validator import Validator
@@ -10,7 +10,7 @@ def main(db_file):
     db = Database(db_file)
     controller = TablesController(db)
     view = CLIView()
-    validator = Validator(db)
+    valid = Validator(db)
 
     # The more functions...
     # For example:
@@ -21,43 +21,39 @@ def main(db_file):
         if choice == "cls":
             view.cls()
 
-        elif choice == "sql":
-            sql = db.get_sql()
-            print(sql)
-
-        elif choice == "autoinc":
-            if validator.has_autoincrement():
-                autoinc_seq = validator.get_autoincrement_sequence()
-                print(autoinc_seq)
-            else:
-                print("nincs")
-        
         elif choice == "empty":
             table = input("Table name: ")
             controller.empty_table(table)
-            print(f"{table} deleted!")
+            print("Emptied table!")
+
+        elif choice == "fkey":
+            table = input("Table name: ")
+            keys =  ('id', 'seq', 'table', 'from', 'to', 'on_update')
+            for key in keys:
+                fkey = valid.get_foreign_key_list_by_key(table, key)
+                print(f'{key}: {fkey[0]}')
         
         elif choice == "accol":
             try:
-                controller.accounts_list()
+                controller.get_list("accounts")
             except Exception as error:
                 print(f"\n{str(error)}")
 
-        elif choice == "cacco":
+        elif choice == "aacco":
             try:
-                controller.add_data_accounts()
+                controller.add_data("accounts")
             except Exception as error:
                 print(f"\n{str(error)}")
 
         elif choice == "userl":
             try:
-                controller.users_list()
+                controller.get_list("users")
             except Exception as error:
                 print(f"\n{str(error)}")
 
-        elif choice == "cuser":
+        elif choice == "auser":
             try:
-                controller.add_data_users()
+                controller.add_data("users")
             except Exception as error:
                 print(f"\n{str(error)}")
 

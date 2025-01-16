@@ -1,4 +1,4 @@
-#models/tables/accounts.py
+#models/tables/accounts.py example
 class Accounts:
     def __init__(self, id=None, account_number=None, balance=None, interest_rate=None, user_id=None, timestamp=None):
         self.id = id
@@ -25,11 +25,11 @@ class Accounts:
 
     def save(self, db):
         if self.id: 
-            query = "UPDATE accounts SET account_number = ?, balance = ?, interest_rate = ?, user_id = ?, timestamp = ? WHERE id = ?"
-            params = (self.account_number, self.balance, self.interest_rate, self.user_id, self.timestamp, self.id)
+            query = "UPDATE accounts SET account_number = ?, balance = ?, interest_rate = ?, user_id = ? WHERE id = ?"
+            params = (self.account_number, self.balance, self.interest_rate, self.user_id, self.id)
         else: 
-            query = "INSERT INTO accounts (id, account_number, balance, interest_rate, user_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
-            params = (self.id, self.account_number, self.balance, self.interest_rate, self.user_id, self.timestamp)
+            query = "INSERT INTO accounts (id, account_number, balance, interest_rate, user_id) VALUES (?, ?, ?, ?, ?)"
+            params = (self.id, self.account_number, self.balance, self.interest_rate, self.user_id)
         db.execute(query, params)
 
     def delete(self, db):

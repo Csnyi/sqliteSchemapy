@@ -1,4 +1,4 @@
-# views/cli_view.py
+# views/cli_view.py example
 import os
 import platform
 
@@ -7,21 +7,14 @@ class CLIView:
     def display_menu():
         print(f'''
     Options:
-        lsa:\tAccounts List
-        lsu:\tUsers List
-        cu:\tCreate User
-        du:\tDelete User
-        ui:\tUser Info
-        ca:\tCreate Account
-        d:\tDeposit
-        w:\tWithdraw
-        t:\tTransfer
-        da:\tDelete Account
-        ai:\tAccounz Info
-        ir:\tInterest Rate
+        accol:\tAccounts List
+        aacco:\tAdd Account
+        userl:\tUsers List
+        auser:\tAdd User
+        empty:\tEmpty Table
         cls:\tClear Screen
         q:\tQuit
-        ''')
+    ''')
 
     @staticmethod
     def get_user_input(prompt):

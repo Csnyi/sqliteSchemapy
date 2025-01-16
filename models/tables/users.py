@@ -27,7 +27,8 @@ class Users:
         else: 
             query = "INSERT INTO users (id, name, timestamp) VALUES (?, ?, ?)"
             params = (self.id, self.name, self.timestamp)
-        db.execute(query, params)
+        lastrowid = db.lastrowid(query, params)
+        return lastrowid
 
     def delete(self, db):
         if self.id:

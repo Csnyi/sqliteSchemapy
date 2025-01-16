@@ -11,6 +11,9 @@ class CLIView:
         cacco:\tCreate Accounts
         userl:\tUsers List
         cuser:\tCreate Users
+        sql:\tSQL
+        autoinc:\tAutoincrement Sequence
+        empty:\tEmpty Table and NULL SeqNum
         cls:\tClear Screen
         q:\tQuit
     ''')

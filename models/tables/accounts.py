@@ -30,7 +30,8 @@ class Accounts:
         else: 
             query = "INSERT INTO accounts (id, account_number, balance, interest_rate, user_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
             params = (self.id, self.account_number, self.balance, self.interest_rate, self.user_id, self.timestamp)
-        db.execute(query, params)
+        lastrowid = db.lastrowid(query, params)
+        return lastrowid
 
     def delete(self, db):
         if self.id:

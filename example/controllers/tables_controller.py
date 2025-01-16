@@ -1,4 +1,4 @@
-# controllers/tables_controller.py
+# controllers/tables_controller.py example
 import datetime
 from tabulate import tabulate
 from models.tables_info import Info
@@ -34,24 +34,9 @@ class TablesController:
         if not cls:
             raise Exception(f"The {class_name} does not exist")
         table = cls(**params)
-        lastrowid = table.save(self.db)
-        print(f"The data have been added to the {class_name}! Id: {lastrowid}")
+        table.save(self.db)
+        print("The data have been added!")
 
     def empty_table(self, table):
         self.db.empty_table(table, self.info.table_sql)
-
-    def accounts_list(self):
-        self.get_list("accounts")
-
-    def users_list(self):
-        self.get_list("users")
-
-
-    def add_data_accounts(self):
-        self.add_data("accounts")
-
-    def add_data_users(self):
-        self.add_data("users")
-
-
 

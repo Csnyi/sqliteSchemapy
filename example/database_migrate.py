@@ -1,3 +1,4 @@
+#database_migrate.py example
 import argparse
 import configparser
 import textwrap
@@ -15,19 +16,20 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
         class_name = table.capitalize()
         model_file = f'{model_path}{table}.py'
         attributes = tuple(col['name'] for col in columns)
+        attrs_save = tuple(col['name'] for col in columns if col["name"] != "timestamp")
         init_args = ', '.join([f"{arg}=None" for arg in attributes])
         init_body = '\n                        '.join(f"self.{arg} = {arg}" for arg in attributes)
         attrs = ", ".join([f"{attr}={{self.{attr}!r}}" for attr in attributes])
         fetch_col = ', '.join([f"{col}" for col in attributes])
-        update_set = ", ".join([f"{attr} = ?" for attr in attributes if attr != 'id'])
-        update_param = ", ".join([f"self.{attr}" for attr in attributes if attr != 'id'])
-        insert_set = ", ".join(attributes)
-        insert_val = ", ".join(["?" for _ in attributes])
-        insert_param = ", ".join([f"self.{attr}" for attr in attributes])
+        update_set = ", ".join([f"{attr} = ?" for attr in attrs_save if attr != 'id'])
+        update_param = ", ".join([f"self.{attr}" for attr in attrs_save if attr != 'id'])
+        insert_set = ", ".join(attrs_save)
+        insert_val = ", ".join(["?" for _ in attrs_save])
+        insert_param = ", ".join([f"self.{attr}" for attr in attrs_save])
         
         with open(model_file, 'w') as f:
             content = textwrap.dedent(f'''\
-                #{model_file}
+                #{model_file} example
                 class {class_name}:
                     def __init__(self, {init_args}):
                         {init_body}
@@ -54,8 +56,7 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                         else: 
                             query = "INSERT INTO {table} ({insert_set}) VALUES ({insert_val})"
                             params = ({insert_param})
-                        lastrowid = db.lastrowid(query, params)
-                        return lastrowid
+                        db.execute(query, params)
 
                     def delete(self, db):
                         if self.id:
@@ -70,8 +71,6 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
     from_model = '\n            '.join(f"from {path}{table} import {table.capitalize()}" for table in table_info)
     table_names = [*(table for table in table_info)]
     dict_timestamp = dict()
-    list_functions = ""
-    add_functions = ""
     elif_list = ""
     display_menu = textwrap.dedent(f'''\
         print(f\'\'\'
@@ -80,29 +79,17 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
     for table_name in table_names:
         class_name = table_name.capitalize()
         dict_timestamp[table_name] = ""
-        list_functions += textwrap.dedent(f'''\
-            def {table_name}_list(self):
-                {"":>16}self.get_list("{table_name}")
-
-        ''')
-        list_functions += f'''{"":>16}'''
-        add_functions += textwrap.dedent(f'''\
-            def add_data_{table_name}(self):
-                {"":>16}self.add_data("{table_name}")
-
-        ''')
-        add_functions += f'''{"":>16}'''
         option = table_name[:4]
         elif_list += textwrap.dedent(f'''\
             elif choice == "{option}l":
                 {"":>20}try:
-                    {"":>20}controller.{table_name}_list()
+                    {"":>20}controller.get_list("{table_name}")
                 {"":>20}except Exception as error:
                     {"":>20}print(f"\\n{{str(error)}}")
 
-            {"":>20}elif choice == "c{option}":
+            {"":>20}elif choice == "a{option}":
                 {"":>20}try:
-                    {"":>20}controller.add_data_{table_name}()
+                    {"":>20}controller.add_data("{table_name}")
                 {"":>20}except Exception as error:
                     {"":>20}print(f"\\n{{str(error)}}")
                     
@@ -110,15 +97,17 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
         elif_list += f'''{"":>20}'''
         display_menu += f'''\
             {"":>8}{option}l:\\t{class_name} List
-            {"":>8}c{option}:\\tCreate {class_name}\n'''
+            {"":>8}a{option}:\\tAdd {class_name[:-1]}\n'''
 
     display_menu += f'''\
+        {"":>12}empty:\\tEmpty Table
         {"":>12}cls:\\tClear Screen
         {"":>12}q:\\tQuit
         {"":>8}\'\'\')'''
     
     with open(info_file, 'w') as f:
         content = textwrap.dedent(f"""\
+            # {info_file} example
             class Info: 
                 def __init__(self):
                     self.table_colnames = {table_colnames}
@@ -130,7 +119,7 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
 
     with open(controller_file, 'w') as f:
         content = textwrap.dedent(f'''\
-            # {controller_file}
+            # {controller_file} example
             import datetime
             from tabulate import tabulate
             from {from_info} import Info
@@ -165,18 +154,18 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                     if not cls:
                         raise Exception(f"The {{class_name}} does not exist")
                     table = cls(**params)
-                    lastrowid = table.save(self.db)
-                    print(f"The data have been added to the {{class_name}}! Id: {{lastrowid}}")
-
-                {list_functions}
-                {add_functions}
+                    table.save(self.db)
+                    print("The data have been added!")
                 
+                def empty_table(self, table):
+                    self.db.empty_table(table, self.info.table_sql)
+          
         ''')
         f.write(content)
 
     with open(view_file, 'w') as f:
         content = textwrap.dedent(f'''\
-            # {view_file}
+            # {view_file} example
             import os
             import platform
 
@@ -207,7 +196,7 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
 
     with open(main_file, 'w') as f:
         content = textwrap.dedent(f'''\
-            # {main_file}
+            # {main_file} example
             import argparse
             import configparser
             from models.database.database import Database
@@ -228,6 +217,11 @@ def main(db_file, info_file, model_path, controller_file, view_file, main_file, 
                     if choice == "cls":
                         view.cls()
 
+                    elif choice == "empty":
+                        table = input("Table name: ")
+                        controller.empty_table(table)
+                        print("Emptied table!")
+                    
                     {elif_list}
                     elif choice == "q":
                         db.close()

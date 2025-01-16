@@ -1,4 +1,4 @@
-#models/tables/users.py
+#models/tables/users.py example
 class Users:
     def __init__(self, id=None, name=None, timestamp=None):
         self.id = id
@@ -22,11 +22,11 @@ class Users:
 
     def save(self, db):
         if self.id: 
-            query = "UPDATE users SET name = ?, timestamp = ? WHERE id = ?"
-            params = (self.name, self.timestamp, self.id)
+            query = "UPDATE users SET name = ? WHERE id = ?"
+            params = (self.name, self.id)
         else: 
-            query = "INSERT INTO users (id, name, timestamp) VALUES (?, ?, ?)"
-            params = (self.id, self.name, self.timestamp)
+            query = "INSERT INTO users (id, name) VALUES (?, ?)"
+            params = (self.id, self.name)
         db.execute(query, params)
 
     def delete(self, db):
