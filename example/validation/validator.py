@@ -18,4 +18,6 @@ class Validator:
         return self.foreign_key_list
     
     def get_foreign_key_list_by_key(self, table, key):
+        if not self.foreign_key_list[table]:
+            raise Exception("Foreign key not found!")
         return [fkey[key] for fkey in self.foreign_key_list[table]]

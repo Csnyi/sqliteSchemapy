@@ -24,16 +24,22 @@ class Accounts:
         return Accounts(*row) if row else None
 
     def save(self, db):
+        required_columns = db.get_required_columns("accounts")
+        params = [getattr(self, col) for col in required_columns]
         if self.id: 
-            query = "UPDATE accounts SET account_number = ?, balance = ?, interest_rate = ?, user_id = ? WHERE id = ?"
-            params = (self.account_number, self.balance, self.interest_rate, self.user_id, self.id)
+            set_str = ", ".join(f"{col} = ?" for col in required_columns)
+            query = f"UPDATE accounts SET {set_str} WHERE id = ?"
+            params.append(self.id)
         else: 
-            query = "INSERT INTO accounts (id, account_number, balance, interest_rate, user_id) VALUES (?, ?, ?, ?, ?)"
-            params = (self.id, self.account_number, self.balance, self.interest_rate, self.user_id)
+            columns_str = ", ".join(required_columns)
+            placeholders = ", ".join("?" for _ in required_columns)
+            query = f"INSERT INTO accounts ({columns_str}) VALUES ({placeholders});"
         db.execute(query, params)
 
     def delete(self, db):
         if self.id:
-            query = "DELETE FROM accounts WHERE id = ?"
-            db.execute(query, (self.id,))
-
+            try:
+                query = "DELETE FROM accounts WHERE id = ?"
+                db.execute(query, (self.id,))
+            except db.conn.IntegrityError as e:
+                raise Exception(e)

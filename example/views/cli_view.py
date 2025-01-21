@@ -9,8 +9,13 @@ class CLIView:
     Options:
         accol:\tAccounts List
         aacco:\tAdd Account
+        uacco:\tUpdate Account
         userl:\tUsers List
         auser:\tAdd User
+        uuser:\tUpdate Users
+        fkey:\tForeign key by table
+        fka:\tForeign key
+        sql:\tSql by table
         empty:\tEmpty Table
         cls:\tClear Screen
         q:\tQuit
