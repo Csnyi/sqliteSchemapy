@@ -1,0 +1,40 @@
+app
+    -> controllers
+    -> -> db
+    -> -> -> db_controller.py
+    -> -> tables
+    -> -> -> tables_controller.py
+    -> db
+    -> -> db.db
+    -> -> dump.sql
+    -> -> db.db.sql
+    -> models
+    -> -> database
+    -> -> -> database.py
+    -> -> tables
+    -> -> -> tablename1.py
+    -> -> -> tablename2.py
+    -> -> -> ...
+    -> validation
+    -> -> validator.py
+    -> views
+    -> -> cli
+    -> -> -> cli_view.py
+    -> -> gui
+    -> -> -> gui_view.py
+tests
+-> test.py
+utils
+-> utils.py
+template
+-> database.py  #sqlite3 alapfunkciók osztályban (def execute(), def fetchall(), def close() stb.)
+-> validator.py #validáció pl. adattípusokhoz, foreign key-hez stb.
+migration
+-> controllers_migration.py
+-> models_migration.py
+-> views_migration.py
+-> makedirs.py # az app könyvtárainak és fájljainak létrehozásához
+config.ini
+config.py
+main.py
+migration.py

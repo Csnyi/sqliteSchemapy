@@ -1,0 +1,46 @@
+BEGIN TRANSACTION;
+CREATE TABLE "users" (
+	"id"	INTEGER,
+	"name"	TEXT NOT NULL,
+	"timestamp"	DATETIME DEFAULT CURRENT_TIMESTAMP,
+	'valid' BOOLEAN DEFAULT 1,
+	PRIMARY KEY("id" AUTOINCREMENT),
+	UNIQUE("name")
+);
+INSERT INTO "users" VALUES(1,'Makka','2025-01-26 17:51:55',1);
+INSERT INTO "users" VALUES(2,'Mikka','2025-01-26 17:51:55',1);
+INSERT INTO "users" VALUES(3,'Polki','2025-01-26 17:51:55',1);
+INSERT INTO "users" VALUES(4,'Mokka','2025-01-26 21:27:06',1);
+CREATE TABLE "accounts" (
+	"id"	INTEGER,
+	"account_number"	INTEGER,
+	"balance"	REAL NOT NULL,
+	"interest_rate"	REAL DEFAULT 0.0,
+	"user_id"	INTEGER,
+	"timestamp"	DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("user_id") REFERENCES "users"("id"),
+	PRIMARY KEY("id" AUTOINCREMENT),
+	UNIQUE("account_number")
+);
+INSERT INTO "accounts" VALUES(1,1001,3210.0,0.046,1,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(2,1002,3250.0,0.046,1,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(3,2001,4300.0,0.046,2,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(4,2002,3410.0,0.046,2,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(5,3001,5600.0,0.046,3,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(6,3002,4320.0,0.046,3,'2025-01-26 17:51:55');
+INSERT INTO "accounts" VALUES(7,4001,5300.0,0.046,4,'2025-01-26 21:27:24');
+CREATE TABLE "address" (
+ "id" INTEGER, 
+ "city" TEXT, 
+ "street" TEXT, 
+ "zip" INTEGER, 
+ "user_id" INTEGER,
+ FOREIGN KEY("user_id") REFERENCES "users"("id"),
+ PRIMARY KEY("id" AUTOINCREMENT)
+);
+INSERT INTO "address" VALUES(1,'Makifa','Makilaki 23.',2120,1);
+DELETE FROM "sqlite_sequence";
+INSERT INTO "sqlite_sequence" VALUES('users',4);
+INSERT INTO "sqlite_sequence" VALUES('accounts',7);
+INSERT INTO "sqlite_sequence" VALUES('address',1);
+COMMIT;

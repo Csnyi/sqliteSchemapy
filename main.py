@@ -1,87 +1,50 @@
 # main.py
-import argparse
-import configparser
-from validation.validator import Validator
-from models.database.database import Database
-from views.cli_view import CLIView
-from controllers.tables_controller import TablesController
+import database_migrate as dm
+import subprocess
+import sys
 
-def main(db_file):
-    db = Database(db_file)
-    controller = TablesController(db)
-    view = CLIView()
-    validator = Validator(db)
+def list_tables(db_file_path):
+    db = dm.Database(db_file_path)
+    tables = [table for table in db.get_table_info()]
+    print("Tables: ", ", ".join(tables))
 
-    # The more functions...
-    # For example:
-    while True:
-        view.display_menu()
-        choice = input("Option: ")
+def create_app(config):
+    # create directories and files
+    dm.create_folders(config["migrate"]["Paths"])
+    dm.create_files(config["migrate"]["Files"])
+    # copy processes only the [CopyFiles] section
+    if "CopyFiles" in config["migrate"]:
+        dm.copy_static_files(config["migrate"]["CopyFiles"])
 
-        if choice == "cls":
-            view.cls()
+    params = {
+        "app_root": config["kwargs"]["app_root"],
+        "db_file_path": config["kwargs"]["db_file_path"],
+        "models_tables": config["kwargs"]["models_tables"],
+        "tables_controller": config["kwargs"]["tables_controller"],
+        "cli_view": config["kwargs"]["cli_view"],
+        "db_main": config["kwargs"]["db_main"],
+        "dump_file": config["kwargs"]["dump_file"]
+    }
 
-        elif choice == "sql":
-            sql = db.get_sql()
-            print(sql)
+    dm.main(**params)
 
-        elif choice == "autoinc":
-            if validator.has_autoincrement():
-                autoinc_seq = validator.get_autoincrement_sequence()
-                print(autoinc_seq)
-            else:
-                print("nincs")
-        
-        elif choice == "empty":
-            table = input("Table name: ")
-            controller.empty_table(table)
-            print(f"{table} deleted!")
-        
-        elif choice == "accol":
-            try:
-                controller.accounts_list()
-            except Exception as error:
-                print(f"\n{str(error)}")
+def run_cli(config):
+    db_main = config["kwargs"]["db_main"]
+    subprocess.run([sys.executable, db_main])
 
-        elif choice == "cacco":
-            try:
-                controller.add_data_accounts()
-            except Exception as error:
-                print(f"\n{str(error)}")
+def main():
+    config = dm.load_config()
 
-        elif choice == "userl":
-            try:
-                controller.users_list()
-            except Exception as error:
-                print(f"\n{str(error)}")
+    if config["args"].command == "list":
+        db = config["kwargs"]["db_file_path"]
+        list_tables(db)
+    elif config["args"].command == "generate":
+        create_app(config)
+    elif config["args"].command == "runcli":
+        run_cli(config)
+    else:
+        config["parser"].print_help()
 
-        elif choice == "cuser":
-            try:
-                controller.add_data_users()
-            except Exception as error:
-                print(f"\n{str(error)}")
-
-
-        elif choice == "q":
-            db.close()
-            view.cls()
-            print("Goodby!")
-            break 
-
-if __name__ == '__main__':
-    # Argumentumok beolvasása
-    parser = argparse.ArgumentParser(description="Main script.")
-    parser.add_argument("--db_file", type=str, help="Az adatbázis fájl elérési útja.")
-    parser.add_argument("--config", type=str, default="config_migrate.ini", help="A konfigurációs fájl elérési útja.")
-
-    args = parser.parse_args()
-
-    # Konfigurációs fájl beolvasása
-    config = configparser.ConfigParser()
-    config.read(args.config)
-
-    # Argumentumok vagy konfigurációs fájl használata
-    db_file = args.db_file or config["Paths"]["db_file"]
-
-    main(db_file)
+if __name__ == "__main__":
+    main()
 
