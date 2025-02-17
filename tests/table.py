@@ -1,12 +1,14 @@
 import sqlite3
 import os
 import platform
+from tabulate import tabulate
 
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
+        self.cursor.execute('PRAGMA foreign_keys = ON;')
 
     def execute(self, query, params=()):
         self.cursor.execute(query, params)
@@ -135,6 +137,20 @@ if __name__ == "__main__":
     while True:
         choice = input("Option: ")
         
+        if choice == "list":
+            try:
+                table_name = input("Table name: ")
+                class_name = table_name.capitalize()
+                table_class = globals().get(class_name)(db)
+                rows = table_class.fetch_all()
+                header = [col for col in table_class.columns]
+                table = [header]
+                tablerows = [row for row in rows]
+                table.extend(tablerows)
+                print(tabulate(table, headers="firstrow"))
+            except Exception as e:
+                print(e)
+
         if choice == "add":
             try:
                 table_name = input("Table name: ")
@@ -146,7 +162,7 @@ if __name__ == "__main__":
                     params[col] = input(f"{col}: ")
                 table.set_required_data(**params)
                 table.save()
-                print("All data", table.fetch_all())
+                print(f"{params} Data added to {table_name}")
             except Exception as e:
                 print(e)
         
@@ -162,13 +178,22 @@ if __name__ == "__main__":
                     params[col] = input(f"{col}: ")
                 table.set_data(**params)
                 table.save()
-                print("All data", table.fetch_all())
+                print(f"{params} Data updated to {table_name}")
             except Exception as e:
                 print(e)
 
         elif choice == "del":
-            ...
-        
+            try:
+                table_name = input("Table name: ")
+                class_name = table_name.capitalize()
+                table = globals().get(class_name)(db)
+                id = int(input("Row ID: "))
+                deleted = table.fetch_one_by_id(id)
+                table.delete(id)
+                print(f"{deleted} Data deleted to {table_name}")
+            except Exception as e:
+                print(e)
+
         elif choice == "cols":
             table_name = input("Table name: ")
             class_name = table_name.capitalize()
@@ -187,3 +212,74 @@ if __name__ == "__main__":
             break
             db.close()
     
+'''
+import argparse
+
+def list_data(table):
+    print(table.fetch_all())
+
+def add_data(table, params):
+    table.set_data(**params)
+    table.save()
+    print("Inserted:", table.fetch_all())
+
+def update_data(table, row_id, params):
+    params["id"] = row_id
+    table.set_data(**params)
+    table.save()
+    print("Updated:", table.fetch_all())
+
+def delete_data(table, row_id):
+    table.delete(row_id)
+    print(f"Deleted row {row_id}")
+
+def show_columns(table):
+    print("All columns:", table.get_all_columns())
+
+def show_required_columns(table):
+    print("Required columns:", table.columns)
+
+if __name__ == "__main__":
+    db = Database("../db/bank.db")
+
+    parser = argparse.ArgumentParser(description="Database CLI")
+
+    parser.add_argument("command", choices=["list", "add", "upd", "del", "cols", "req_cols"], help="Command to execute")
+    parser.add_argument("table", help="Table name")
+    parser.add_argument("--id", type=int, help="Row ID (for update/delete)")
+    parser.add_argument("--data", nargs="*", help="Key=Value pairs for add/update")
+
+    args = parser.parse_args()
+
+    class_name = args.table.capitalize()
+    table = globals().get(class_name)(db)
+
+    if args.command == "list":
+        list_data(table)
+
+    elif args.command == "add":
+        if not args.data:
+            print("No data provided!")
+        else:
+            params = {k: v for k, v in (item.split("=") for item in args.data)}
+            add_data(table, params)
+
+    elif args.command == "upd":
+        if not args.id or not args.data:
+            print("Update requires --id and --data!")
+        else:
+            params = {k: v for k, v in (item.split("=") for item in args.data)}
+            update_data(table, args.id, params)
+
+    elif args.command == "del":
+        if not args.id:
+            print("Delete requires --id!")
+        else:
+            delete_data(table, args.id)
+
+    elif args.command == "cols":
+        show_columns(table)
+
+    elif args.command == "req_cols":
+        show_required_columns(table)
+'''
