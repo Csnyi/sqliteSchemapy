@@ -1,4 +1,6 @@
 import sqlite3
+import os
+import platform
 
 class Database:
     def __init__(self, db_path: str):
@@ -31,12 +33,18 @@ class Table:
         self.db = db
         self.table_name = table_name
         self.columns = self._get_table_info()
+        self.required_columns = self.get_required_columns()
+
+    def get_required_columns(self):
+        """Lekérdezi az ajánlott oszlopokat és azok típusait egy dict-ben tárolva."""
+        query = f"PRAGMA table_info({self.table_name})"
+        return {row[1]: row[2] for row in self.db.fetchall(query) if row[4] is None and row[5] == 0}
 
     def _get_table_info(self):
         """Lekérdezi az oszlopokat és azok típusait egy dict-ben tárolva."""
         query = f"PRAGMA table_info({self.table_name})"
         return {row[1]: row[2] for row in self.db.fetchall(query)}
-
+    
     def fetch_all(self):
         """Visszaadja az összes sort a táblából."""
         query = f"SELECT * FROM {self.table_name}"
@@ -67,28 +75,39 @@ class Table:
         query = f"DELETE FROM {self.table_name} WHERE id = ?"
         self.db.execute(query, (row_id,))
 
+    def set_data(self, **kwargs):
+        for key, value in kwargs.items():
+            if key in self.columns:
+                setattr(self, key, value)
+    
+    def set_required_data(self, **kwargs):
+        for key, value in kwargs.items():
+            if key in self.required_columns:
+                setattr(self, key, value)
+
+    def save(self):
+        try:
+            if hasattr(self, "id") and self.id:
+                current_data = self.fetch_one_by_id(self.id)  # Meglévő adatok lekérése
+                if current_data:
+                    existing_values = dict(zip(self.columns.keys(), current_data))
+                    update_data = {k: v for k, v in self.__dict__.items()
+                                if k in self.columns 
+                                and k != "id" 
+                                and v is not None 
+                                and v != existing_values.get(k)}
+                    if update_data:  # Csak ha van tényleges változás
+                        self.update(self.id, **update_data)
+            else:
+                self.id = self.insert(**{k: v for k, v in self.__dict__.items() if k in self.required_columns})
+        except Exception as e:
+            raise Exception(f"Save error: {e}")
+
 class Users(Table):
     def __init__(self, db: Database):
         super().__init__(db, "users")
         for col in self.columns:
             setattr(self, col, None)
-
-    def set_data(self, **kwargs):
-        for key, value in kwargs.items():
-            if key in self.columns:
-                setattr(self, key, value)
-
-    def save(self):
-        if hasattr(self, "id") and self.id:
-            current_data = self.fetch_one_by_id(self.id)  # Meglévő adatok lekérése
-            if current_data:
-                existing_values = dict(zip(self.columns.keys(), current_data))
-                update_data = {k: v for k, v in self.__dict__.items()
-                            if k in self.columns and k != "id" and v is not None and v != existing_values.get(k)}
-                if update_data:  # Csak ha van tényleges változás
-                    self.update(self.id, **update_data)
-        else:
-            self.id = self.insert(**{k: v for k, v in self.__dict__.items() if k in self.columns})
 
 class Accounts(Table):
     def __init__(self, db: Database):
@@ -96,29 +115,75 @@ class Accounts(Table):
         for col in self.columns:
             setattr(self, col, None)
 
-    def set_data(self, **kwargs):
-        for key, value in kwargs.items():
-            if key in self.columns:
-                setattr(self, key, value)
+class Address(Table):
+    def __init__(self, db: Database):
+        super().__init__(db, "address")
+        for col in self.columns:
+            setattr(self, col, None)
 
-    def save(self):
-        if hasattr(self, "id") and self.id:
-            current_data = self.fetch_one_by_id(self.id)  # Meglévő adatok lekérése
-            if current_data:
-                existing_values = dict(zip(self.columns.keys(), current_data))
-                update_data = {k: v for k, v in self.__dict__.items()
-                            if k in self.columns and k != "id" and v is not None and v != existing_values.get(k)}
-                if update_data:  # Csak ha van tényleges változás
-                    self.update(self.id, **update_data)
-        else:
-            self.id = self.insert(**{k: v for k, v in self.__dict__.items() if k in self.columns})
-
+@staticmethod
+def cls():
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
 
 # Példa használat
 if __name__ == "__main__":
-    db = Database("db/bank.db")
-    accounts = Accounts(db)
-    accounts.set_data(id=3, account_number=1007373000971070, balance=50000)
-    accounts.save()
-    print("All accounts:", accounts.fetch_all())
-    db.close()
+    db = Database("../db/bank.db")
+    
+    while True:
+        choice = input("Option: ")
+        
+        if choice == "add":
+            try:
+                table_name = input("Table name: ")
+                class_name = table_name.capitalize()
+                table = globals().get(class_name)(db)
+                cols = table.required_columns
+                params = {}
+                for col in cols:
+                    params[col] = input(f"{col}: ")
+                table.set_required_data(**params)
+                table.save()
+                print("All data", table.fetch_all())
+            except Exception as e:
+                print(e)
+        
+        elif choice == "upd":
+            try:
+                table_name = input("Table name: ")
+                class_name = table_name.capitalize()
+                table = globals().get(class_name)(db)
+                params = {}
+                params["id"] = int(input("id: "))
+                cols = input("columns: ").split(", ")
+                for col in cols:
+                    params[col] = input(f"{col}: ")
+                table.set_data(**params)
+                table.save()
+                print("All data", table.fetch_all())
+            except Exception as e:
+                print(e)
+
+        elif choice == "del":
+            ...
+        
+        elif choice == "cols":
+            table_name = input("Table name: ")
+            class_name = table_name.capitalize()
+            table = globals().get(class_name)(db)
+            print(f"{table_name} columns: {[col for col in table.columns]}")
+
+        elif choice == "req_cols":
+            table_name = input("Table name: ")
+            class_name = table_name.capitalize()
+            table = globals().get(class_name)(db)
+            print(f"{table_name} required columns: {table.required_columns}")
+        
+        elif choice == "q":
+            cls()
+            print(f"\nGoodby!")
+            break
+            db.close()
+    
