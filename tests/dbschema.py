@@ -1,12 +1,14 @@
 import sqlite3
 import os
 import platform
+import argparse
 from tabulate import tabulate
 
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row 
         self.cursor = self.conn.cursor()
         self.cursor.execute('PRAGMA foreign_keys = ON;')
 
@@ -30,19 +32,35 @@ class Database:
     def close(self):
         self.conn.close()
 
+    def fetch_tables(self):
+        """Lekérdezi az adatbázis tábláit"""
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        return [row["name"] for row in self.cursor.fetchall()]
+
+    def fetch_columns(self, table_name):
+        """Lekérdezi egy adott tábla oszlopait"""
+        self.cursor.execute(f"PRAGMA table_info({table_name})")
+        return [row["name"] for row in self.cursor.fetchall()]
+
+    def get_tables(self):
+        query = "SELECT name FROM sqlite_master WHERE type='table' and tbl_name != 'sqlite_sequence';"
+        return [', '.join([*row]) for row in self.fetchall(query)]
+
 class Table:
     def __init__(self, db: Database, table_name: str):
         self.db = db
         self.table_name = table_name
-        self.columns = self._get_table_info()
+        self.columns = self.get_all_columns()
         self.required_columns = self.get_required_columns()
-
+        for col in self.columns:
+            setattr(self, col, None)
+    
     def get_required_columns(self):
         """Lekérdezi az ajánlott oszlopokat és azok típusait egy dict-ben tárolva."""
         query = f"PRAGMA table_info({self.table_name})"
         return {row[1]: row[2] for row in self.db.fetchall(query) if row[4] is None and row[5] == 0}
 
-    def _get_table_info(self):
+    def get_all_columns(self):
         """Lekérdezi az oszlopokat és azok típusait egy dict-ben tárolva."""
         query = f"PRAGMA table_info({self.table_name})"
         return {row[1]: row[2] for row in self.db.fetchall(query)}
@@ -105,156 +123,84 @@ class Table:
         except Exception as e:
             raise Exception(f"Save error: {e}")
 
-class Users(Table):
-    def __init__(self, db: Database):
-        super().__init__(db, "users")
-        for col in self.columns:
-            setattr(self, col, None)
+    def add_column(self, column_definition):
+        query = f"ALTER TABLE {self.table_name} ADD COLUMN {column_definition}"
+        self.db.execute(query)
 
-class Accounts(Table):
-    def __init__(self, db: Database):
-        super().__init__(db, "accounts")
-        for col in self.columns:
-            setattr(self, col, None)
+def fetch_all(table):
+    return [dict(row) for row in table.fetch_all()]
 
-class Address(Table):
-    def __init__(self, db: Database):
-        super().__init__(db, "address")
-        for col in self.columns:
-            setattr(self, col, None)
+def fetch_one_by_id(table, row_id):
+    return dict(table.fetch_one_by_id(row_id))
 
-@staticmethod
-def cls():
-    if platform.system() == "Windows":
-        os.system("cls")
-    else:
-        os.system("clear")
+def list_table(db):
+    print(db.get_tables())
 
-# Példa használat
-if __name__ == "__main__":
-    db = Database("../db/bank.db")
-    
-    while True:
-        choice = input("Option: ")
-        
-        if choice == "list":
-            try:
-                table_name = input("Table name: ")
-                class_name = table_name.capitalize()
-                table_class = globals().get(class_name)(db)
-                rows = table_class.fetch_all()
-                header = [col for col in table_class.columns]
-                table = [header]
-                tablerows = [row for row in rows]
-                table.extend(tablerows)
-                print(tabulate(table, headers="firstrow"))
-            except Exception as e:
-                print(e)
-
-        if choice == "add":
-            try:
-                table_name = input("Table name: ")
-                class_name = table_name.capitalize()
-                table = globals().get(class_name)(db)
-                cols = table.required_columns
-                params = {}
-                for col in cols:
-                    params[col] = input(f"{col}: ")
-                table.set_required_data(**params)
-                table.save()
-                print(f"{params} Data added to {table_name}")
-            except Exception as e:
-                print(e)
-        
-        elif choice == "upd":
-            try:
-                table_name = input("Table name: ")
-                class_name = table_name.capitalize()
-                table = globals().get(class_name)(db)
-                params = {}
-                params["id"] = int(input("id: "))
-                cols = input("columns: ").split(", ")
-                for col in cols:
-                    params[col] = input(f"{col}: ")
-                table.set_data(**params)
-                table.save()
-                print(f"{params} Data updated to {table_name}")
-            except Exception as e:
-                print(e)
-
-        elif choice == "del":
-            try:
-                table_name = input("Table name: ")
-                class_name = table_name.capitalize()
-                table = globals().get(class_name)(db)
-                id = int(input("Row ID: "))
-                deleted = table.fetch_one_by_id(id)
-                table.delete(id)
-                print(f"{deleted} Data deleted to {table_name}")
-            except Exception as e:
-                print(e)
-
-        elif choice == "cols":
-            table_name = input("Table name: ")
-            class_name = table_name.capitalize()
-            table = globals().get(class_name)(db)
-            print(f"{table_name} columns: {[col for col in table.columns]}")
-
-        elif choice == "req_cols":
-            table_name = input("Table name: ")
-            class_name = table_name.capitalize()
-            table = globals().get(class_name)(db)
-            print(f"{table_name} required columns: {table.required_columns}")
-        
-        elif choice == "q":
-            cls()
-            print(f"\nGoodby!")
-            break
-            db.close()
-    
-'''
-import argparse
-
-def list_data(table):
-    print(table.fetch_all())
+def list_data(table_class):
+    try:
+        rows = table_class.fetch_all()
+        header = [col for col in table_class.columns]
+        table = [header]
+        tablerows = [row for row in rows]
+        table.extend(tablerows)
+        print(tabulate(table, headers="firstrow"))
+    except Exception as e:
+        print(e)
 
 def add_data(table, params):
     table.set_data(**params)
     table.save()
-    print("Inserted:", table.fetch_all())
+    print("Inserted:", table.id, params)
 
 def update_data(table, row_id, params):
     params["id"] = row_id
     table.set_data(**params)
     table.save()
-    print("Updated:", table.fetch_all())
+    print("Updated:", params)
 
-def delete_data(table, row_id):
+def delete_row(table, row_id):
     table.delete(row_id)
     print(f"Deleted row {row_id}")
+    list_data(table)
 
 def show_columns(table):
-    print("All columns:", table.get_all_columns())
+    print("All columns:", table.columns)
 
 def show_required_columns(table):
-    print("Required columns:", table.columns)
+    print("Required columns:", table.required_columns)
+
+def add_column(table):
+    column_definition = input("Column definition: ")
+    table.add_column(column_definition)
+    print(f"Added column: {column_definition}")
+    
+def exec_custom(table):
+    query = input("Query: ")
+    print(db.fetchall(query))
+
 
 if __name__ == "__main__":
-    db = Database("../db/bank.db")
-
+    
     parser = argparse.ArgumentParser(description="Database CLI")
 
-    parser.add_argument("command", choices=["list", "add", "upd", "del", "cols", "req_cols"], help="Command to execute")
+    parser.add_argument("db", help="Database path")
+    parser.add_argument("command", choices=["dblist", "list", "add", "upd", "del", "cols", "req_cols", "add_col", "exec"], help="Command to execute")
     parser.add_argument("table", help="Table name")
     parser.add_argument("--id", type=int, help="Row ID (for update/delete)")
     parser.add_argument("--data", nargs="*", help="Key=Value pairs for add/update")
 
     args = parser.parse_args()
+    db = Database(args.db)
 
-    class_name = args.table.capitalize()
-    table = globals().get(class_name)(db)
+    if args.table in db.fetch_tables():
+        table = Table(db, args.table)
+    else:
+        print(f"'{args.table}' invalid table!")
 
-    if args.command == "list":
+    if args.command == "dblist":
+        list_table(db)
+    
+    elif args.command == "list":
         list_data(table)
 
     elif args.command == "add":
@@ -275,11 +221,17 @@ if __name__ == "__main__":
         if not args.id:
             print("Delete requires --id!")
         else:
-            delete_data(table, args.id)
+            delete_row(table, args.id)
 
     elif args.command == "cols":
         show_columns(table)
 
     elif args.command == "req_cols":
         show_required_columns(table)
-'''
+    
+    elif args.command == "add_col":
+        add_column(table)
+        
+    elif args.command == "exec":
+        exec_custom(table)
+        
