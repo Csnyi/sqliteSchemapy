@@ -1,7 +1,7 @@
 from dbschema import *
 
 db = Database("../db/bank.db")
-table = Table(db, "users")
+table = Table(db, "accounts")
 
-row= fetch_one_by_id(table, 11)
-print(row)
+exec_custom(table)
+list_data(table)

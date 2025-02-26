@@ -16,6 +16,10 @@ class Database:
         self.cursor.execute(query, params)
         self.conn.commit()
 
+    def executemany(self, query, params_list):
+        self.cursor.executemany(query, params_list)
+        self.conn.commit()
+    
     def fetchall(self, query, params=()):
         self.cursor.execute(query, params)
         return self.cursor.fetchall()
@@ -83,6 +87,18 @@ class Table:
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
         return self.db.lastrowid(query, values)
 
+    def insertmany(self, rows):
+        """Új sorokat szúr be tömbösített formában."""
+        if not rows:
+            return  # Ha üres a bemenet, nincs teendő
+
+        columns = ', '.join(rows[0].keys())  # Az első elem kulcsai alapján az oszlopok
+        placeholders = ', '.join(['?'] * len(rows[0]))
+        values = [tuple(row.values()) for row in rows]  # Több soros lista
+
+        query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
+        self.db.executemany(query, values)
+    
     def update(self, row_id, **kwargs):
         """Frissít egy sort az ID alapján."""
         set_clause = ', '.join([f"{col} = ?" for col in kwargs.keys()])
@@ -122,9 +138,13 @@ class Table:
                 self.id = self.insert(**{k: v for k, v in self.__dict__.items() if k in self.required_columns})
         except Exception as e:
             raise Exception(f"Save error: {e}")
-
+  
     def add_column(self, column_definition):
         query = f"ALTER TABLE {self.table_name} ADD COLUMN {column_definition}"
+        self.db.execute(query)
+
+    def exec_custom(self):
+        query = input("Query: ")
         self.db.execute(query)
 
 def fetch_all(table):
@@ -148,9 +168,21 @@ def list_data(table_class):
         print(e)
 
 def add_data(table, params):
-    table.set_data(**params)
+    table.set_required_data(**params)
     table.save()
     print("Inserted:", table.id, params)
+
+def add_many(table, params_list):
+    """Több soros beszúrás dinamikusan."""
+    if not params_list:
+        return
+
+    # Szűrés csak az oszlopnevekre
+    clean_data = [
+        {k: v for k, v in row.items() if k in table.columns} for row in params_list
+    ]
+    table.insertmany(clean_data)
+    print("Inserted:", clean_data)
 
 def update_data(table, row_id, params):
     params["id"] = row_id
@@ -175,10 +207,8 @@ def add_column(table):
     print(f"Added column: {column_definition}")
     
 def exec_custom(table):
-    query = input("Query: ")
-    print(db.fetchall(query))
-
-
+    table.exec_custom()
+    
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Database CLI")
