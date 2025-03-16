@@ -1,48 +1,28 @@
-import tkinter as tk
-#import tkinter.messagebox
-import customtkinter as ctk
-from db.dbschema import *
-import datetime
-import json
+import requests
 import threading
+import tkinter as tk
+import customtkinter as ctk
+import json
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from sseclient import SSEClient
+import datetime
 import time
-from sse import *
-
-# db
-db = Database("db/stream.db")
-table = Table(db, "data")
-
-def view_data():
-    rows = table.fetch_all()
-    data=[]
-    for row in rows:
-        json_text  = row["json"]
-        data.append(json.loads(json_text))
-    plate =[["lock", "snr", "lm snr", "timestamp"]]
-    platerows = [[row["lock"], row["snr"], row["lm_snr"], datetime.datetime.fromtimestamp(row["timestamp"] / 1000.0)] for row in data]
-    plate.extend(platerows)
-    return tabulate(plate, headers="firstrow")
-
-# graph
-
-# Matplotlib globális változók
-
-def start_snr_monitor_thread():
-    """Háttérfolyamatként indítja az SNR figyelőt és a grafikont."""
-    thread = threading.Thread(target=plt.show, daemon=True)
-    thread.start()
+import platform
 
 # ctk
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
-ctk.set_default_color_theme("tkthemes/Anthracite.json")  # Themes: "blue" (standard), "green", "dark-blue"
+ctk.set_default_color_theme("tkthemes/breeze.json")  # Themes: "blue" (standard), "green", "dark-blue"
 
 appWidth, appHeight, pozx, pozy = 960, 540, 100, 100
 
 SNR_FIELDS = [
     {
+        'name': 'freq',
         'title': 'Frequency:',
         'type': 'str'
     },{
+        'name': 'lo',
         'title': 'Local Oscillator:',
         'type': 'list',
         'data': [
@@ -60,17 +40,21 @@ SNR_FIELDS = [
             "11300"
         ]
     },{
+        'name': 'sr',
         'title': 'Symbol rate:',
         'type': 'str'
     },{
+        'name': 'pol',
         'title': 'Polarization:',
         'type': 'list',
         'data': ["Horizontal", "Vertical"]
     },{
+        'name': 'tone',
         'title': 'Tone:',
         'type': 'list',
         'data': ["Off", "On"]
     },{
+        'name': 'diseqc_hex',
         'title': 'DISEqC Port - Command:',
         'type': 'list',
         'data': [
@@ -101,6 +85,7 @@ SNR_FIELDS = [
             "16 - E01039FF",
         ]
     },{
+        'name': 'smart_lnb_enabled',
         'title': '3D converter polling:',
         'type': 'list',
         'data': ["Disabled", "Enabled"]
@@ -109,16 +94,21 @@ SNR_FIELDS = [
 
 SPECT_FIELDS = [
     {
+        'name': 'sat_list',
         'title': 'Satellite List:',
         'type': 'list',
         'data': ['sat1', 'sat2', 'sat from STB']
     },{
+        'name': 'report_list',
         'title': 'Report List:',
         'type': 'list',
         'data': ['repprt1', 'report2', 'report from STB']
     }
 ]
+
 scaling_values = ["80%", "90%", "100%", "110%", "120%", "150%"]
+
+STB_IP = "192.168.1.5"  # Később az appban beállítható
 
 class ToplevelWindow(ctk.CTkToplevel):
     def __init__(self, master, info, *args, **kwargs):
@@ -158,7 +148,7 @@ class CustomOptionMenu(ctk.CTkOptionMenu):
         else:
             self.old_value = choice  # Frissítjük a régi értéket, ha szabályos a választás
 
-class App(ctk.CTk):
+class RamfApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
@@ -219,13 +209,13 @@ class App(ctk.CTk):
                 anchor="w")
         self.label_main.grid(row=0, column=0, padx=10, pady=5)
 
-        # --- create graph 1
-        self.graph1 = ctk.CTkFrame(self)
-        self.graph1.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        # --- create middle frame up
+        self.middle_up = ctk.CTkFrame(self)
+        self.middle_up.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
 
-        # --- create graph 2
-        self.graph2 = ctk.CTkFrame(self)
-        self.graph2.grid(row=2, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        # --- create middle frame down
+        self.middle_down = ctk.CTkFrame(self)
+        self.middle_down.grid(row=2, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
 
         # --- create tabview
         self.tabview = ctk.CTkTabview(self, width=100)
@@ -248,9 +238,9 @@ class App(ctk.CTk):
         self.spect_entries = self.create_form(self.spect_form_frame, SPECT_FIELDS)
         
         # Spect Button
-        self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Create Report", command=lambda: self.open_input_dialog_event(self.spect_entries["Satellite List:"]))
+        self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Create Report", command=lambda: self.open_input_dialog_event(self.spect_entries["sat_list"]))
         self.spect_button_create_report.grid(row=2, column=0, padx=20, pady=20, sticky="nsew")
-        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_input_dialog_event(self.spect_entries["Report List:"]))
+        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_input_dialog_event(self.spect_entries["report_list"]))
         self.spect_button_open_report.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
         
         ## SNR Report Form
@@ -264,7 +254,7 @@ class App(ctk.CTk):
         self.snr_form_frame.grid(row=1, column=0, sticky="nsew")
 
         self.snr_form_row = self.create_form(self.snr_form_frame, SNR_FIELDS)
-
+        
         # Egér görgetés hozzárendelése a megfelelő eseményekhez
         self.snr_form_frame.bind("<Enter>", self.bind_scroll)
         self.snr_form_frame.bind("<Leave>", self.unbind_scroll)
@@ -288,6 +278,132 @@ class App(ctk.CTk):
         self.scaling_optionemenu.set("100%")
         self.progressbar_1.configure(mode="indeterminate")
         self.progressbar_frame.grid_forget()
+
+        # ============================================= sse_03_16.py === start
+
+        self.event_source = None
+        self.event_thread = None
+        self.running = True  # Folyamatos SSE figyelés
+        self.mode = "spectrum"  # Alapértelmezett mód
+
+        # GUI elemek
+        self.status_var = tk.StringVar(value="Kapcsolódás...")
+        self.status_label = ctk.CTkLabel(self.middle_up, textvariable=self.status_var, font=("Arial", 16))
+        self.status_label.grid(row=1, column=0, padx=(10, 10), pady=(10, 10), sticky="ew")
+        self.error_var = tk.StringVar(value="")
+        self.error_label = ctk.CTkLabel(self.middle_up, textvariable=self.error_var, font=("Arial", 16))
+        self.error_label.grid(row=2, column=0, padx=(10, 10), pady=(10, 10), sticky="ew")
+
+        # Módválasztó dropdown
+        self.mode_var = tk.StringVar(value="spectrum")
+        self.mode_selector = ctk.CTkOptionMenu(self.middle_up, values=["snr", "spectrum", "blindscan"], 
+                                               command=self.change_mode, variable=self.mode_var)
+        self.mode_selector.grid(row=4, column=0, padx=(10, 10), pady=(10, 10), sticky="ew")
+
+        self.send_button = ctk.CTkButton(self.middle_up, text="Parancs Küldése", command=self.send_command)
+        self.send_button.grid(row=5, column=0, padx=(10, 10), pady=(10, 10), sticky="ew")
+
+        # Matplotlib ábra létrehozása
+        self.fig, self.ax = plt.subplots(figsize=(6, 3))
+        self.ax.set_title("Spektrum Analízis")
+        self.ax.set_xlabel("Frekvencia pontok")
+        self.ax.set_ylabel("Jelszint (dB)")
+        self.line, = self.ax.plot([], [], "b-", lw=1)
+
+        # Matplotlib integrálása a Tkinter ablakba
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_down)
+        self.canvas.get_tk_widget().grid(row=1, column=0, padx=(10, 10), pady=(10, 10), sticky="ew")
+
+        # SSE események figyelésének indítása
+        self.event_thread = threading.Thread(target=self.listen_sse, daemon=True)
+        self.event_thread.start()
+
+    def send_command(self):
+        """Elküldi az initSmartSNR parancsot az STB-nek az aktuális mód és paraméterek alapján."""
+        self.error_var.set("")
+        freq = self.snr_form_row["freq"].get()
+        lo = self.snr_form_row["lo"].get()
+
+        if not freq or freq == '':
+            self.error_var.set("Hiba: Adj meg frekvenciát!")
+            return
+        else:
+            freq_IF = float(freq) - float(lo)
+
+        sr = self.snr_form_row["sr"].get()
+
+        if not sr:
+            sr = "63000"  # Spectrum módhoz fix érték
+
+        pol = self.snr_form_row["pol"].get()
+
+        tone = self.snr_form_row["tone"].get()
+
+        diseqc_hex = self.snr_form_row["diseqc_hex"].get()
+
+        smart_lnb_enabled = self.snr_form_row["smart_lnb_enabled"].get()
+
+        url = f"http://{STB_IP}/public?command=initSmartSNR&state=on&mode={self.mode}&freq={freq_IF}&sr={sr}&pol={pol}&tone={tone}&diseqc_hex={diseqc_hex}"
+        
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                self.status_var.set(f"Parancs elküldve: {self.mode} mód")
+            else:
+                self.error_var.set(f"Hiba: {response.status_code}")
+        except requests.RequestException as e:
+            self.error_var.set(f"Hálózati hiba: {str(e)}")
+
+    def change_mode(self, selected_mode):
+        """Mód váltása (snr, spectrum, blindscan)."""
+        self.mode = selected_mode
+        self.status_var.set(f"Mód beállítva: {self.mode}")
+
+    def listen_sse(self):
+        """Folyamatos SSE figyelés háttérszálban."""
+        url = f"http://{STB_IP}/public?command=startEvents"
+        
+        try:
+            self.event_source = SSEClient(url)
+            for event in self.event_source:
+                if not self.running:
+                    break
+                data = event.data
+                self.after(0, self.process_sse_data, data)
+        except Exception as e:
+            self.after(0, self.error_var.set, f"SSE hiba: {str(e)}")
+
+    def process_sse_data(self, data):
+        """GUI frissítése az SSE események alapján."""
+        try:
+            parsed_data = json.loads(data)
+
+            # Scan status és lock állapot kiírása
+            scan_status = parsed_data.get("scan_status", "N/A")
+            lock = "Locked" if parsed_data.get("lock") == 1 else "Not Locked"
+            self.status_var.set(f"Status: {scan_status} | Lock: {lock}")
+
+            # Spektrum adatok frissítése, ha "spectrum_array" létezik
+            if "spectrum_array" in parsed_data:
+                spectrum_data = parsed_data["spectrum_array"]
+                self.update_spectrum_chart(spectrum_data)
+
+        except Exception:
+            self.status_var.set(f"SSE adat: {data}")
+
+    def update_spectrum_chart(self, spectrum_data):
+        """Frissíti a matplotlib grafikont a kapott spektrum adatokkal."""
+        x_values = list(range(len(spectrum_data)))  # 0-479 pont
+        y_values = spectrum_data
+
+        self.line.set_xdata(x_values)
+        self.line.set_ydata(y_values)
+        self.ax.relim()  # Újraértékeli a tengelyeket
+        self.ax.autoscale_view()  # Automatikusan méretezi a grafikont
+
+        self.canvas.draw()  # Frissíti a rajzot
+    
+    # ================================================= sse_03_16.py === end
 
     def long_progress(self):
         #Ez szimulál egy hosszabb ideig tartó műveletet.
@@ -321,7 +437,7 @@ class App(ctk.CTk):
             elif field["type"] == "list":
                 entry = CustomOptionMenu(parent, values=field["data"])
             entry.grid(row=row_index, column=0, padx=5, pady=5, sticky="ew")
-            entries[field["title"]] = entry
+            entries[field["name"]] = entry
             row_index += 1
         return entries
 
@@ -384,6 +500,6 @@ class App(ctk.CTk):
             self.snr_form_frame._parent_canvas.yview_scroll(1, "units")  # Lefelé görgetés
 
 if __name__ == "__main__":
-    app = App()
+    app = RamfApp()
     app.mainloop()
     

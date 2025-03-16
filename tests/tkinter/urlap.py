@@ -1,7 +1,7 @@
 import customtkinter as ctk
 
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("Anthracite.json")
+ctk.set_default_color_theme("tkthemes/Anthracite.json")
 
 FIELDS = [
     {
