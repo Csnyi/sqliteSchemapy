@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-ctk.set_appearance_mode("dark")  # Sötét téma
+ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("Anthracite.json")
 
 FIELDS = [
@@ -109,6 +109,8 @@ class App(ctk.CTk):
         self.title("CustomTkinter Űrlap")
         self.geometry("+100+100")
 
+        self.vcmd = self.register(self.validate_input)
+
         # Űrlap konténer frame
         self.form_frame = ctk.CTkFrame(self)
         self.form_frame.pack(pady=10, fill="both", expand=True)
@@ -118,10 +120,6 @@ class App(ctk.CTk):
         self.form_frame.columnconfigure(1, weight=2)  # Entry oszlop (nagyobb szélesség)
 
         self.entries = self.create_form(self.form_frame, FIELDS)
-        # egyenlő távolságra rendezés
-        """ ents = len(FIELDS)
-        rows = tuple(range(ents))
-        form_frame.rowconfigure(rows, weight=1) """
 
         # Gombok
         self.button_frame = ctk.CTkFrame(self)
@@ -143,9 +141,6 @@ class App(ctk.CTk):
             self.toplevel_window = ToplevelWindow(self, info_text)  # Helyesen adjuk át a master-t
         else:
             self.toplevel_window.update_text(info_text)  # Ha létezik az ablak, fókuszáljunk rá
-        
-        #self.toplevel_window.update_idletasks()  # GUI frissítés
-        #self.toplevel_window.geometry("+300+300")  # Újrapozicionálás egy jól látható helyre
         self.toplevel_window.lift()
 
     def create_form(self, parent, fields):
@@ -154,7 +149,7 @@ class App(ctk.CTk):
             ctk.CTkLabel(parent, text=field["title"], anchor="w").grid(row=i, column=0, padx=10, pady=5, sticky="ew")
 
             if field["type"] == "str":
-                entry = ctk.CTkEntry(parent)
+                entry = ctk.CTkEntry(parent, validate="key", validatecommand=(self.vcmd, "%P"))
                 entry.grid(row=i, column=1, padx=10, pady=5, sticky="ew")
                 entries[field["title"]] = entry
 
@@ -162,8 +157,14 @@ class App(ctk.CTk):
                 option_menu = CustomOptionMenu(parent, values=field["data"])
                 option_menu.grid(row=i, column=1, padx=10, pady=5, sticky="ew")
                 entries[field["title"]] = option_menu
-
+        print(entries["DISEqC Port - Command:"].get())
         return entries
+
+    def validate_input(self, value):
+        """Csak számokat és egyetlen pontot engedélyez"""
+        if value == "" or value.replace(".", "", 1).isdigit():
+            return True
+        return False
 
     def show_data(self):
         data = {key: entry.get() for key, entry in self.entries.items()}

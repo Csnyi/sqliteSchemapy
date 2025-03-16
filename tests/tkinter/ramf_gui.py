@@ -6,6 +6,7 @@ import datetime
 import json
 import threading
 import time
+from sse import *
 
 # db
 db = Database("db/stream.db")
@@ -19,10 +20,17 @@ def view_data():
         data.append(json.loads(json_text))
     plate =[["lock", "snr", "lm snr", "timestamp"]]
     platerows = [[row["lock"], row["snr"], row["lm_snr"], datetime.datetime.fromtimestamp(row["timestamp"] / 1000.0)] for row in data]
-    #plate = [[row for row in data[0]]]
-    #platerows = [[v for v in row.values()] for row in data]
     plate.extend(platerows)
     return tabulate(plate, headers="firstrow")
+
+# graph
+
+# Matplotlib globális változók
+
+def start_snr_monitor_thread():
+    """Háttérfolyamatként indítja az SNR figyelőt és a grafikont."""
+    thread = threading.Thread(target=plt.show, daemon=True)
+    thread.start()
 
 # ctk
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
@@ -180,7 +188,7 @@ class App(ctk.CTk):
         self.sidebar_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
         # buttons top
-        self.sidebar_button_open = ctk.CTkButton(self.sidebar_frame, text="Open", command=self.sidebar_button_event)
+        self.sidebar_button_open = ctk.CTkButton(self.sidebar_frame, text="Open", command=plt.show)
         self.sidebar_button_open.grid(row=1, column=0, padx=20, pady=10)
         self.sidebar_button_save = ctk.CTkButton(self.sidebar_frame, text="Save", command=self.start_progress)
         self.sidebar_button_save.grid(row=2, column=0, padx=20, pady=10)
@@ -196,6 +204,7 @@ class App(ctk.CTk):
         self.appearance_mode_label.grid(row=sidebar_bottom_row_index+1, column=0, padx=20, pady=(10, 0))
         self.appearance_mode_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=["Light", "Dark", "System"], command=self.change_appearance_mode_event)
         self.appearance_mode_optionemenu.grid(row=sidebar_bottom_row_index+2, column=0, padx=20, pady=(10, 10))
+        
         self.scaling_label = ctk.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
         self.scaling_label.grid(row=sidebar_bottom_row_index+3, column=0, padx=20, pady=(10, 0))
         self.scaling_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=["80%", "90%", "100%", "110%", "120%", "150%"], command=self.change_scaling_event)
@@ -210,16 +219,13 @@ class App(ctk.CTk):
                 anchor="w")
         self.label_main.grid(row=0, column=0, padx=10, pady=5)
 
-        # --- create textbox 1
-        self.textbox = ctk.CTkTextbox(self)
-        self.textbox.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
-        long_text = view_data()
-        self.textbox.insert("1.0", long_text)
-        self.textbox.configure(state="disabled")
+        # --- create graph 1
+        self.graph1 = ctk.CTkFrame(self)
+        self.graph1.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
 
-        # --- create textbox 2
-        self.textbox_2 = ctk.CTkTextbox(self)
-        self.textbox_2.grid(row=2, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+        # --- create graph 2
+        self.graph2 = ctk.CTkFrame(self)
+        self.graph2.grid(row=2, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
 
         # --- create tabview
         self.tabview = ctk.CTkTabview(self, width=100)
@@ -282,7 +288,6 @@ class App(ctk.CTk):
         self.scaling_optionemenu.set("100%")
         self.progressbar_1.configure(mode="indeterminate")
         self.progressbar_frame.grid_forget()
-        self.textbox_2.insert("0.0", "CTkTextbox2\n\n")
 
     def long_progress(self):
         #Ez szimulál egy hosszabb ideig tartó műveletet.
@@ -334,7 +339,7 @@ class App(ctk.CTk):
         selected_value = option_menu.get()
         dialog_text = f"Selected Value: {selected_value}"
         dialog = ctk.CTkInputDialog(text=dialog_text, title="Input Dialog")
-        self.textbox_2.insert("0.0", f"{dialog.get_input()}\n")
+        print(f"{dialog.get_input()}\n")
 
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
@@ -343,10 +348,6 @@ class App(ctk.CTk):
     def change_scaling_event(self, new_scaling: str):
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         ctk.set_widget_scaling(new_scaling_float)
-
-    def sidebar_button_event(self):
-        self.textbox_2.insert("0.0", text=f"sidebar_button click \n")
-        #print("sidebar_button click")
 
     def togle_pb(self):
         if self.progressbar_frame.winfo_ismapped():

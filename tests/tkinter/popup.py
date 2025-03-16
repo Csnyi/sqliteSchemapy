@@ -20,7 +20,7 @@ def popupfunc():
 
     canvas = Canvas(frame, width=100, height=130)
     canvas.grid(row=1, column=0)
-    imgvar = PhotoImage(file="pyrocket.png")
+    imgvar = PhotoImage(file="images/pyrocket.png")
     canvas.create_image(50,70, image=imgvar)
     canvas.image = imgvar
 
