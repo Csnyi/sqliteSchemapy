@@ -3,6 +3,8 @@ import threading
 import tkinter as tk
 import customtkinter as ctk
 import json
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from sseclient import SSEClient
 import datetime
 import time
@@ -13,7 +15,7 @@ STB_IP = "192.168.1.4"  # Állítsd be a megfelelő IP címet
 # ctk
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
 ctk.set_default_color_theme("tkthemes/breeze.json")  # Themes: "blue" (standard), "green", "dark-blue"
-ctk.set_widget_scaling(1.5)
+#ctk.set_widget_scaling(1.5)
 
 appWidth, appHeight, pozx, pozy = 960, 540, 100, 100
 
@@ -139,19 +141,6 @@ class ToplevelWindow(ctk.CTkToplevel):
         """Szöveg frissítése az ablakban"""
         self.label.configure(text=new_text)
 
-class CustomOptionMenu(ctk.CTkOptionMenu):
-    def __init__(self, parent, values, *args, **kwargs):
-        super().__init__(parent, values=values, *args, **kwargs)
-        self.old_value = values[0]  # Alapértelmezett érték
-        self.configure(command=self.on_select)
-
-    def on_select(self, choice):
-        # Ellenőrizzük, hogy az adott érték tiltott-e
-        if choice.startswith("---"):
-            self.set(self.old_value)  # Ha tiltott, visszaállítjuk az előző értékre
-        else:
-            self.old_value = choice  # Frissítjük a régi értéket, ha szabályos a választás
-
 class RamfApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -160,7 +149,7 @@ class RamfApp(ctk.CTk):
         self.title("R.A.M.F. Report")
         self.geometry(f"{appWidth}x{appHeight}+{pozx}+{pozy}")
 
-        self.tp_list = None
+        self.tp_list = []
         self.sat_list = []
         self.version_run = False
         self.event_source = None
@@ -186,17 +175,22 @@ class RamfApp(ctk.CTk):
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure((sidebar_bottom_row_index), weight=1)
         
-        self.sidebar_label = ctk.CTkLabel(self.sidebar_frame, text="Menu", font=ctk.CTkFont(size=20, weight="bold"))
-        self.sidebar_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        # stb ip
+        self.sidebar_stbip_label = ctk.CTkLabel(self.sidebar_frame, text="STB IP:", anchor="w")
+        self.sidebar_stbip_label.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        self.sidebar_stbip_entry = ctk.CTkEntry(self.sidebar_frame)
+        self.sidebar_stbip_entry.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
         
+        # version labels
+        self.sidebar_label_version_var = ctk.StringVar()
+        self.sidebar_label_version = ctk.CTkLabel(self.sidebar_frame, textvariable=self.sidebar_label_version_var, font=ctk.CTkFont(size=10, weight="bold"), anchor="w")
+        self.sidebar_label_version.grid(row=2, column=0, padx=20, pady=10)
+
+        self.f_text_var = ctk.StringVar()
+        self.sidebar_f_text = ctk.CTkLabel(master=self.sidebar_frame, textvariable=self.f_text_var)
+        self.sidebar_f_text.grid(row=3, column=0)
+
         # buttons top
-        """ self.sidebar_button_gettplist = ctk.CTkButton(self.sidebar_frame, text="tplist", command=self.)
-        self.sidebar_button_gettplist.grid(row=1, column=0, padx=20, pady=10)
-        self.sidebar_button_getver = ctk.CTkButton(self.sidebar_frame, text="version", command=self.)
-        self.sidebar_button_getver.grid(row=2, column=0, padx=20, pady=10)
-        self.sidebar_button_getsatlist = ctk.CTkButton(self.sidebar_frame, text="satlist", command=self.)
-        self.sidebar_button_getsatlist.grid(row=3, column=0, padx=20, pady=10) """
-        
         self.sidebar_button_propert = ctk.CTkButton(self.sidebar_frame, text="Properties", command=self.start_progress)
         self.sidebar_button_propert.grid(row=4, column=0, padx=20, pady=10)
         self.sidebar_button_toggle = ctk.CTkButton(self.sidebar_frame, text="Toggle pb", command=self.togle_pb)
@@ -222,17 +216,25 @@ class RamfApp(ctk.CTk):
         self.status_label.grid(row=0, column=0, padx=10, pady=5)
 
         # --- create box top
-        self.box_top = ctk.CTkScrollableFrame(self)
+        self.box_top = ctk.CTkFrame(self)
         self.box_top.grid(row=1, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
         
-        # box top labels
-        self.f_text_var = tk.StringVar()
-        self.box_top_label = ctk.CTkLabel(master=self.box_top, textvariable=self.f_text_var)
-        self.box_top_label.grid(row=0, column=0)
-
         # --- create box bottom
-        self.box_bottom = ctk.CTkTextbox(self, width=250)
+        self.box_bottom = ctk.CTkFrame(self, width=250)
         self.box_bottom.grid(row=2, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+
+        # Matplotlib ábra létrehozása
+        self.fig, self.ax = plt.subplots(figsize=(6, 3))
+        self.ax.set_title("Spektrum Analízis")
+        self.ax.set_xlabel("Frekvencia pontok")
+        self.ax.set_ylabel("Jelszint (dB)")
+        self.line, = self.ax.plot([], [], "b-", lw=1)
+
+        # Matplotlib integrálása a Tkinter ablakba
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.box_bottom)
+        self.canvas.get_tk_widget().grid(row=1, column=0, padx=(10, 10), pady=(10, 10), sticky="nsew")
+        
+        #self.box_bottom.bind("<Configure>", self.resize_bottom_plot)
 
         # --- create tabview
         self.tabview = ctk.CTkTabview(self, width=100)
@@ -327,7 +329,7 @@ class RamfApp(ctk.CTk):
                 self.status_var.set(f"Parancs elküldve: version")
                 data = response.json()
                 q = data["serial"]
-                self.f_text_var.set(f'STB nane - {data["stb_name"]}\nSerial - {q[0:4]}:{q[4:8]}:{q[8:12]}:{q[12:16]}\nSTB - {data["version"]["stb"]}\nWebApi - {data["version"]["web_api"]}')
+                self.sidebar_label_version_var.set(f'STB nane - {data["stb_name"]}\nSerial - {q[0:4]}:{q[4:8]}:{q[8:12]}:{q[12:16]}\nSTB - {data["version"]["stb"]}\nWebApi - {data["version"]["web_api"]}')
                 self.get_satlist()
             else:
                 self.status_var.set(f"Hiba: {response.status_code}")
@@ -341,8 +343,6 @@ class RamfApp(ctk.CTk):
             if response.status_code == 200:
                 self.status_var.set(f"Parancs elküldve: returnTPList")
                 data = response.json()
-                for k, v in data.items():
-                    self.box_bottom.insert("0.0", f"Data: \n{k} - {v}\n\n")
                 self.f_text_var.set(data["sat_num"])
                 self.sat_list = data["sat_list"]
                 sat_names = []
@@ -366,7 +366,6 @@ class RamfApp(ctk.CTk):
                 self.tp_list = data["tp_list"]
                 tps = []
                 for tp in self.tp_list:
-                    self.box_bottom.insert("end", f'{tp["freq"]} - {tp["polarity"]} - {tp["sr"]}\n')
                     tps.append(f'{tp["freq"]} - {"H" if tp["polarity"]==0 else "V" } - {tp["sr"]}')
                 self.spect_form_row["tp_list"].configure(values = tps)
                 self.spect_form_row["tp_list"].set(tps[0])
@@ -377,12 +376,11 @@ class RamfApp(ctk.CTk):
     
     def send_initSmartSNR(self):
         """Elküldi az initSmartSNR parancsot az STB-nek az aktuális mód és paraméterek alapján."""
-        self.error_var.set("")
         freq = self.snr_form_row["freq"].get()
         lo = self.snr_form_row["lo"].get()
 
         if not freq or freq == '':
-            self.error_var.set("Hiba: Adj meg frekvenciát!")
+            self.status_var.set("Hiba: Adj meg frekvenciát!")
             return
         else:
             freq_IF = float(freq) - float(lo)
@@ -407,9 +405,9 @@ class RamfApp(ctk.CTk):
             if response.status_code == 200:
                 self.status_var.set(f"Parancs elküldve: {self.mode} mód")
             else:
-                self.error_var.set(f"Hiba: {response.status_code}")
+                self.status_var.set(f"Hiba: {response.status_code}")
         except requests.RequestException as e:
-            self.error_var.set(f"Hálózati hiba: {str(e)}")
+            self.status_var.set(f"Hálózati hiba: {str(e)}")
 
     def change_mode(self, selected_mode):
         """Mód váltása (snr, spectrum, blindscan)."""
@@ -444,14 +442,11 @@ class RamfApp(ctk.CTk):
             # Spektrum adatok frissítése, ha "spectrum_array" létezik
             if parsed_data["tune_mode"] == 1:
                 spectrum_data = parsed_data["spectrum_array"]
-                self.box_bottom.delete("0.0", "end")
-                self.box_bottom.insert("0.0", spectrum_data)
-                #self.status_var.set(spectrum_data)
-                #self.update_spectrum_chart(spectrum_data)
+                self.update_spectrum_chart(spectrum_data)
             
             # bind scan
             if parsed_data["tune_mode"] == 3:
-                self.status_var.set("bind scan")
+                self.status_var.set("bindscan")
             
         except Exception:
             self.status_var.set("Connected")
@@ -460,7 +455,27 @@ class RamfApp(ctk.CTk):
                 self.version_thread = threading.Thread(target=self.get_version, daemon=True)
                 self.version_thread.start()
                 self.version_run = True
-  
+    
+    def update_spectrum_chart(self, spectrum_data):
+        """Frissíti a matplotlib grafikont a kapott spektrum adatokkal."""
+        x_values = list(range(len(spectrum_data)))  # 0-479 pont
+        y_values = spectrum_data
+
+        self.line.set_xdata(x_values)
+        self.line.set_ydata(y_values)
+        self.ax.relim()  # Újraértékeli a tengelyeket
+        self.ax.autoscale_view()  # Automatikusan méretezi a grafikont
+
+        self.canvas.draw()  # Frissíti a rajzot
+
+    def resize_bottom_plot(self, event):
+        """Frissíti a Matplotlib ábra méretét a CTkFrame méretéhez igazítva"""
+        new_width = self.box_bottom.winfo_width() / 100  # Inchbe konvertálás
+        new_height = self.box_bottom.winfo_height() / 100
+
+        self.fig.set_size_inches(new_width, new_height, forward=True)  # Új méret beállítása
+        self.canvas.draw_idle()  # Frissítés
+    
     # ====== sse ==== end
     
     def long_progress(self):
