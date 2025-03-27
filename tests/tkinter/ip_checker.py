@@ -5,7 +5,7 @@ import ipaddress
 class IPValidator:
     @staticmethod
     def validate_partial_ip(value):
-        """Gépelés közbeni IP-rész validálása (gyors, memóriakímélő)."""
+        #Gépelés közbeni IP-rész validálása (gyors, memóriakímélő).
         if value == "":
             return True
         if not re.match(r"^[0-9.]*$", value):  # Csak szám és pont
@@ -18,7 +18,7 @@ class IPValidator:
 
     @staticmethod
     def validate_full_ip(ip):
-        """Teljes IP-cím ellenőrzése ipaddress segítségével."""
+        #Teljes IP-cím ellenőrzése ipaddress segítségével.
         try:
             ipaddress.ip_address(ip)
             return True
@@ -47,11 +47,11 @@ class MyApp(ctk.CTk):
         self.sidebar_stbip_entry.bind("<KeyRelease>", self.on_ip_typing)
 
     def validate_input(self, value):
-        """Hook a tkinter input validálásához (csak számok és pontok)"""
+        #Hook a tkinter input validálásához (csak számok és pontok)
         return IPValidator.validate_partial_ip(value)
 
     def on_ip_typing(self, event):
-        """Amikor a felhasználó beírja az IP-t, teljes validációt végzünk."""
+        #Amikor a felhasználó beírja az IP-t, teljes validációt végzünk.
         ip = self.sidebar_stbip_entry.get().strip()
         if IPValidator.validate_full_ip(ip):
             self.status_label.configure(text=f"✔ Érvényes IP: {ip}", text_color="green")
@@ -60,3 +60,4 @@ class MyApp(ctk.CTk):
 
 app = MyApp()
 app.mainloop()
+

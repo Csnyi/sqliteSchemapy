@@ -2,10 +2,6 @@ import requests
 import threading
 import tkinter as tk
 import customtkinter as ctk
-
-import ipaddress
-import random
-
 import json
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -14,6 +10,18 @@ import datetime
 import time
 import platform
 import re
+import logging
+
+# Alapértelmezett beállítások: naplófájlba mentés és konzolra is ír
+logging.basicConfig(
+    filename="app.log",  # Naplófájl neve
+    level=logging.INFO,   # INFO szintű loggolás
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+logging.info("========= Program indítása =========")
+## logging.warning("Ez egy figyelmeztetés!")
+## logging.error("Valami hiba történt!")
 
 # ctk
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
@@ -21,14 +29,14 @@ ctk.set_default_color_theme("tkthemes/breeze.json")  # Themes: "blue" (standard)
 
 appWidth, appHeight = 960, 540
 
-def wpos_center(w, h, root):
+def wpos_center(window_width, window_height, root):
+    """Kiszámolja az ablak középre helyezéséhez szükséges koordinátákat."""
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
-    window_width = w
-    window_height = h
     pos_x = (screen_width // 2) - (window_width // 2)
     pos_y = (screen_height // 2) - (window_height // 2)
-    root.geometry(f"{window_width}x{window_height}+{pos_x}+{pos_y}")
+    return f"{window_width}x{window_height}+{pos_x}+{pos_y}"
+
 
 SNR_FIELDS = [
     {
@@ -154,17 +162,18 @@ class IPInputDialog(ctk.CTkToplevel):
         super().__init__(master)
         self.title(title)
         
-        wpos_center(300, 150, self)
+        self.geometry(wpos_center(300, 150, self))
         self.resizable(False, False)
 
         # Fő címke (itt jelenik meg az IP kérés és a hibaüzenet is)
-        self.label = ctk.CTkLabel(self, text="Adjon meg egy IP-címet:")
+        self.label = ctk.CTkLabel(self, text="STB IP:", anchor="w")
         self.label.pack(pady=10)
 
         # IP beviteli mező
-        self.entry = ctk.CTkEntry(self)
+        self.vcmdip = self.register(self.validate_ip)
+        self.entry = ctk.CTkEntry(self, validate='key', validatecommand=(self.vcmdip, "%P"))
         self.entry.pack(pady=5)
-        self.entry.bind("<KeyRelease>", self.validate_ip)
+        self.entry.bind("<KeyRelease>", self.on_ip_typing)
 
         # OK gomb
         self.ok_button = ctk.CTkButton(self, text="OK", state="disabled", command=self.on_ok)
@@ -172,22 +181,51 @@ class IPInputDialog(ctk.CTkToplevel):
 
         # ENTER gomb hozzárendelése az OK funkcióhoz
         self.bind("<Return>", self.on_ok) 
-
+        
         self.result = None
         self.grab_set()  # Az ablak modális lesz
 
-    def validate_ip(self, event=None):
-        """Érvényesíti az IP-címet."""
-        ip = self.entry.get().strip()
-        try:
-            ipaddress.ip_address(ip)
+    
+    # ====== ip valid and refress ====== start
+
+    def validate_ip(self, value):
+        """Gépelés közbeni IP-cím validálás"""
+        if value == "":  
+            return True  # Üres mező engedélyezett
+
+        # Csak számokat és pontot engedélyezünk
+        if not re.match(r"^[0-9.]*$", value):
+            return False
+
+        # Oktettek validálása
+        parts = value.split(".")
+        for part in parts:
+            if part and (not part.isdigit() or int(part) > 255):  
+                return False  # Csak 0-255 közötti számokat engedünk
+
+        # Legfeljebb 4 oktett lehet
+        if len(parts) > 4:
+            return False
+
+        return True  # Ha minden megfelel, érvényes lehet
+
+    def on_ip_change_delayed(self):
+        """Késleltetve ellenőrzi, hogy az IP-cím teljes-e"""
+        ip = self.entry.get()
+        if re.fullmatch(r"(\d{1,3}\.){3}\d{1,3}", ip):  # Csak ha teljes IP-cím
             self.ok_button.configure(state="normal")
-            self.label.configure(text="Adjon meg egy IP-címet:", text_color="#4b8899")  # Alapértelmezett szöveg visszaállítása
-        except ValueError:
-            self.ok_button.configure(state="disabled")
+            self.label.configure(text="STB IP:", text_color="#4b8899")
+
+    def on_ip_typing(self, event):
+        """Minden billentyű lenyomás után törli az előző időzítést és újat indít"""
+        if hasattr(self, "typing_delay"):
+            self.after_cancel(self.typing_delay)  # Meglévő időzítés törlése
+        self.typing_delay = self.after(500, self.on_ip_change_delayed)  # 500ms késleltetés
+
+    # ====== ip valid and refress ====== end
 
     def show_error(self, message):
-        """Megjeleníti a hibaüzenetet a label-ben piros színnel."""
+        #Megjeleníti a hibaüzenetet a label-ben piros színnel.
         self.label.configure(text=message, text_color="red")
 
     def on_ok(self, event=None):
@@ -196,7 +234,7 @@ class IPInputDialog(ctk.CTkToplevel):
 
         # Hálózati ellenőrzés
         if not network_check(ip):
-            self.show_error("❌ Hálózati hiba! Próbáljon meg másik IP-t.")
+            self.show_error("STB IP:")
             return  # Ne zárja be az ablakot, hadd módosítsa az IP-t
 
         self.result = ip  # Ha sikeres, elmentjük az eredményt
@@ -205,21 +243,31 @@ class IPInputDialog(ctk.CTkToplevel):
 def ask_for_ip():
     """IP-cím bekérése a felhasználótól, amíg nem sikerül kapcsolódni."""
     while True:
-        app.update()  # A főablak frissítése a megjelenítéshez
-
         dialog = IPInputDialog()
         dialog.wait_window()  # Megvárjuk, míg bezáródik
 
         if not dialog.result:  
-            print("❌ Nincs IP megadva, kilépés...")
+            logging.info("❌ Nincs IP megadva, kilépés...")
             app.destroy()  # Kilépünk az egész alkalmazásból
             return None  
 
         return dialog.result  # Visszaadja az érvényes IP-t
 
 def network_check(ip):
-    """Hálózati kapcsolat ellenőrzése (szimulált)."""
-    return random.choice([True, False])  # Véletlenszerűen siker vagy hiba
+    """GET kéréssel ellenőrzi, hogy az IP elérhető-e."""
+    url = f"http://{ip}/public?command=version"
+
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            logging.info(f"Hálózat rendben az IP-n: {ip}")
+            return True  # Csak jelezzük, hogy működik
+    except requests.RequestException:
+        pass 
+        
+    logging.error(f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
+    tk.messagebox.showerror(title="Error", message=f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
+    return False
 
 class ToplevelWindow(ctk.CTkToplevel):
     def __init__(self, master, info, *args, **kwargs):
@@ -250,11 +298,11 @@ class RamfApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.stb_ip = "192.168.1.2"
+        self.stb_ip = ""
 
         # --- configure window
         self.title("R.A.M.F. Report")
-        wpos_center(appWidth, appHeight, self)
+        self.geometry(wpos_center(appWidth, appHeight, self))
 
         self.tp_list = []
         self.sat_list = []
@@ -276,7 +324,6 @@ class RamfApp(ctk.CTk):
         self.grid_rowconfigure(3, weight=0)
 
         self.vcmd = self.register(self.validate_input)
-        self.vcmdip = self.register(self.validate_ip)
 
         # --- create sidebar frame with widgets
 
@@ -285,14 +332,6 @@ class RamfApp(ctk.CTk):
         self.sidebar_frame = ctk.CTkFrame(self, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure((sidebar_bottom_row_index), weight=1)
-        
-            # stb ip
-        self.sidebar_stbip_label = ctk.CTkLabel(self.sidebar_frame, text="STB IP:", anchor="w")
-        self.sidebar_stbip_label.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
-        self.sidebar_stbip_entry = ctk.CTkEntry(self.sidebar_frame, validate='key', validatecommand=(self.vcmdip, "%P"))
-        self.sidebar_stbip_entry.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        
-        self.sidebar_stbip_entry.bind("<KeyRelease>", self.on_ip_typing)
 
             # version labels
         self.ver_lab_frame = ctk.CTkFrame(self.sidebar_frame)
@@ -317,10 +356,10 @@ class RamfApp(ctk.CTk):
         self.appearance_mode_label.grid(row=sidebar_bottom_row_index+1, column=0, padx=20, pady=(10, 0))
         self.appearance_mode_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=["Light", "Dark", "System"], command=self.change_appearance_mode_event)
         self.appearance_mode_optionemenu.grid(row=sidebar_bottom_row_index+2, column=0, padx=20, pady=(10, 10))
-        self.scaling_label = ctk.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
-        self.scaling_label.grid(row=sidebar_bottom_row_index+3, column=0, padx=20, pady=(10, 0))
-        self.scaling_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=scaling_values, command=self.change_scaling_event)
-        self.scaling_optionemenu.grid(row=sidebar_bottom_row_index+4, column=0, padx=20, pady=(10, 20))
+        ## self.scaling_label = ctk.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
+        ## self.scaling_label.grid(row=sidebar_bottom_row_index+3, column=0, padx=20, pady=(10, 0))
+        ## self.scaling_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=scaling_values, command=self.change_scaling_event)
+        ## self.scaling_optionemenu.grid(row=sidebar_bottom_row_index+4, column=0, padx=20, pady=(10, 20))
         
         # --- create main bottom label (info row)
 
@@ -423,14 +462,9 @@ class RamfApp(ctk.CTk):
         # --- set default values
 
         self.appearance_mode_optionemenu.set("Dark")
-        self.scaling_optionemenu.set("100%")
+        ## self.scaling_optionemenu.set("100%")
         self.progressbar_1.configure(mode="indeterminate")
         self.progressbar_frame.grid_forget()
-
-        # --- SSE események figyelésének indítása
-
-        """ self.event_thread = threading.Thread(target=self.listen_sse, daemon=True)
-        self.event_thread.start() """
 
         # --- GUI bezárás eseménykezelő
 
@@ -470,7 +504,7 @@ class RamfApp(ctk.CTk):
     def get_version(self):
         url = f"http://{self.stb_ip}/public?command=version"
         try:
-            response = requests.get(url, timeout=1)
+            response = requests.get(url, timeout=2)
             if response.status_code == 200:
                 self.status_var.set(f"Parancs elküldve: version")
                 data = response.json()
@@ -562,7 +596,7 @@ class RamfApp(ctk.CTk):
         smart_lnb_enabled = self.snr_form_row["smart_lnb_enabled"].get()
         smart_lnb_enabled_val = self.get_form_data_val(smart_lnb_enabled, SNR_FIELDS)
 
-        print(f"{freq_IF, lo, sr_value, pol_val, tone_val, diseqc_hex_val, smart_lnb_enabled_val}")
+        logging.info(f"{self.mode} / freq_IF: {freq_IF}, lo: {lo}, sr: {sr_value}, pol: {pol_val}, tone: {tone_val}, diseqc_hex: {diseqc_hex_val}, smart_lnb: {smart_lnb_enabled_val}")
         
         url = f"http://{self.stb_ip}/public?command=initSmartSNR&state=on&mode={self.mode}&freq={freq_IF}&sr={sr_value}&pol={pol_val}&tone={tone_val}&diseqc_hex={diseqc_hex_val}"
         
@@ -595,6 +629,10 @@ class RamfApp(ctk.CTk):
             self.after(0, self.status_var.set, f"SSE hiba: {str(e)}")
             self.restart_sse()
 
+    def start_sse(self):
+        self.event_thread = threading.Thread(target=self.listen_sse, daemon=True)
+        self.event_thread.start()
+    
     def restart_sse(self):
         """Újraindítja az SSE kapcsolatot egy új szálban."""
         self.event_close(2)  # Biztosítsuk, hogy az előző kapcsolat bezáródott
@@ -690,52 +728,11 @@ class RamfApp(ctk.CTk):
         self.canvas.draw()  # Frissíti a rajzot
         
     def on_close(self):
-        print("GUI bezárása... SSE kapcsolat leállítása")
+        logging.info("GUI bezárása... SSE kapcsolat leállítása")
         self.event_close()
         self.destroy()  # Ablak bezárása
     
     # ====== sse ==== end
-    # ====== ip valid and refress ====== start
-
-    def validate_ip(self, value):
-        """Gépelés közbeni IP-cím validálás"""
-        if value == "":  
-            return True  # Üres mező engedélyezett
-
-        # Csak számokat és pontot engedélyezünk
-        if not re.match(r"^[0-9.]*$", value):
-            return False
-
-        # Oktettek validálása
-        parts = value.split(".")
-        for part in parts:
-            if part and (not part.isdigit() or int(part) > 255):  
-                return False  # Csak 0-255 közötti számokat engedünk
-
-        # Legfeljebb 4 oktett lehet
-        if len(parts) > 4:
-            return False
-
-        return True  # Ha minden megfelel, érvényes lehet
-
-    def on_ip_change_delayed(self):
-        """Késleltetve ellenőrzi, hogy az IP-cím teljes-e"""
-        ip = self.sidebar_stbip_entry.get()
-        if re.fullmatch(r"(\d{1,3}\.){3}\d{1,3}", ip):  # Csak ha teljes IP-cím
-            self.stb_ip = ip  # Globális változó frissítése
-            self.status_var.set(f"IP beállítva: {self.stb_ip}")
-            self.version_run = False
-            # Várunk 2 másodpercet, majd újra próbálkozunk
-            time.sleep(2)  
-            self.restart_sse()
-
-    def on_ip_typing(self, event):
-        """Minden billentyű lenyomás után törli az előző időzítést és újat indít"""
-        if hasattr(self, "typing_delay"):
-            self.after_cancel(self.typing_delay)  # Meglévő időzítés törlése
-        self.typing_delay = self.after(500, self.on_ip_change_delayed)  # 500ms késleltetés
-
-    # ====== ip valid and refress ====== end
 
     def long_progress(self):
         #Ez szimulál egy hosszabb ideig tartó műveletet.
@@ -820,9 +817,9 @@ class RamfApp(ctk.CTk):
     def change_appearance_mode_event(self, new_appearance_mode: str):
         ctk.set_appearance_mode(new_appearance_mode)
 
-    def change_scaling_event(self, new_scaling: str):
-        new_scaling_float = int(new_scaling.replace("%", "")) / 100
-        ctk.set_widget_scaling(new_scaling_float)
+    ## def change_scaling_event(self, new_scaling: str):
+    ##     new_scaling_float = int(new_scaling.replace("%", "")) / 100
+    ##     ctk.set_widget_scaling(new_scaling_float)
 
     def togle_pb(self):
         if self.progressbar_frame.winfo_ismapped():
@@ -866,10 +863,11 @@ if __name__ == "__main__":
     ip = ask_for_ip()
 
     if ip:
+        app.stb_ip = ip
         app.deiconify()  # Ha sikerült, megjelenítjük a főablakot
-        print(f"✅ Sikeres kapcsolat az IP-hez: {ip}")
-        app.restart_sse()
+        logging.info(f"Sikeres kapcsolat az IP-hez: {ip}")
+        app.start_sse()
         app.mainloop()
     else:
-        print("🚪 Kilépés...")
+        logging.info("🚪 Kilépés...")
     
