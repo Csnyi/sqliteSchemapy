@@ -12,6 +12,8 @@ import platform
 import re
 import logging
 
+import random
+
 # Alapértelmezett beállítások: naplófájlba mentés és konzolra is ír
 logging.basicConfig(
     filename="app.log",  # Naplófájl neve
@@ -270,29 +272,44 @@ def network_check(ip):
     return False
 
 class ToplevelWindow(ctk.CTkToplevel):
-    def __init__(self, master, info, *args, **kwargs):
+    def __init__(self, master, title, call, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
         self.title("Sent data")
 
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        window_width = 300
-        window_height = 300
+        self.geometry(wpos_center(300, 350, self))
 
-        pos_x = (screen_width // 2) - (window_width // 2)
-        pos_y = (screen_height // 2) - (window_height // 2)
+        self.label = ctk.CTkLabel(self, text=title, justify="left")
+        self.label.pack(padx=5, pady=5, fill="both", expand=True)
+
+            # Matplotlib ábra létrehozása
+        self.fig, self.ax = plt.subplots(figsize=(6, 2))
+        self.ax.set_title("Spektrum Analízis")
+        self.ax.set_xlabel("Frekvencia pontok")
+        self.ax.set_ylabel("Jelszint (dB)")
+        self.line, = self.ax.plot([], [], "b-", lw=1)
+
+            # Matplotlib integrálása a Tkinter ablakba
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
+        self.canvas_widget = self.canvas.get_tk_widget()
+        self.canvas_widget.pack(padx=20, pady=20, fill="both", expand=True)
         
-        self.geometry(f"{window_width}x{window_height}+{pos_x}+{pos_y}")
+        self.button = ctk.CTkButton(self, text="Exit", command=self.destroy)
+        self.button.pack(padx=10, pady=10)
 
-        self.label = ctk.CTkLabel(self, text=info, justify="left")
-        self.label.pack(padx=20, pady=20, fill="both", expand=True)
+        if callable(call):  
+            call(self)
 
-        self.button = ctk.CTkButton(self, text="Ok", command=self.destroy)
-        self.button.pack(padx=20, pady=20)
+    def update_chart(self, data):
+        """Frissíti a matplotlib grafikont a kapott adatokkal."""
+        x_values = list(range(len(data))) 
+        y_values = data  
 
-    def update_text(self, new_text):
-        """Szöveg frissítése az ablakban"""
-        self.label.configure(text=new_text)
+        self.line.set_xdata(x_values)
+        self.line.set_ydata(y_values)
+        self.ax.relim()  # Újraértékeli a tengelyeket
+        self.ax.autoscale_view()  # Automatikusan méretezi a grafikont
+
+        self.canvas.draw()  # Frissíti a rajzot
 
 class RamfApp(ctk.CTk):
     def __init__(self):
@@ -306,6 +323,8 @@ class RamfApp(ctk.CTk):
 
         self.tp_list = []
         self.sat_list = []
+        self.dir_list = []
+        self.report_data = []
         self.version_run = False
         self.widget_scaling = 1
 
@@ -413,11 +432,12 @@ class RamfApp(ctk.CTk):
         self.spect_form_row = self.create_form(self.spect_form_frame, SPECT_FIELDS)
         self.spect_form_row["sat_list"].configure(command=self.sat_list_changed)
         self.spect_form_row["tp_list"].configure(command=self.tp_list_changed)
+        self.spect_form_row["report_list"].configure(command=self.report_list_changed)
         
             # Spect Button
-        self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Create Report", command=lambda: self.open_input_dialog_event(self.spect_form_row["sat_list"]))
+        self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Report", command=lambda: self.open_input_dialog_event(self.spect_form_row["sat_list"]))
         self.spect_button_create_report.grid(row=2, column=0, padx=20, pady=20, sticky="nsew")
-        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("spect"))
+        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("spect", self.toplevel_chart_update))
         self.spect_button_open_report.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
         
             ## --- SNR Report Form
@@ -501,6 +521,22 @@ class RamfApp(ctk.CTk):
         except StopIteration as err:
             self.status_var.set(f"Error: {err}")
     
+    def report_list_changed(self, elem):
+        logging.info(f"# report list changed {elem}")
+        report_name = elem[:-4]
+        # http://192.168.1.56/public?command=returnReport&report_name=e:/rpt_3_585E_2021-01-07_11_14_58.json
+        url = f'http://{self.stb_ip}/public?command=returnReport&report_name=e:/{report_name}.json'
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                self.status_var.set(f"Parancs elküldve: returnReport")
+                self.report_data = response.json()
+                logging.info(self.report_data)
+            else:
+                self.status_var.set(f"Hiba: {response.status_code}")
+        except requests.RequestException as e:
+            self.status_var.set(f"Hálózati hiba: {str(e)}")
+    
     def get_version(self):
         url = f"http://{self.stb_ip}/public?command=version"
         try:
@@ -550,6 +586,25 @@ class RamfApp(ctk.CTk):
                     tps.append(f'{tp["freq"]} - {"H" if tp["polarity"]==0 else "V" } - {tp["sr"]}')
                 self.spect_form_row["tp_list"].configure(values = tps)
                 self.spect_form_row["tp_list"].set(tps[0])
+                self.get_reportlist()
+            else:
+                self.status_var.set(f"Hiba: {response.status_code}")
+        except requests.RequestException as e:
+            self.status_var.set(f"Hálózati hiba: {str(e)}")
+
+    def get_reportlist(self):
+        url = f"http://{self.stb_ip}/mnt/flash/e/ls.json"
+        try:
+            response = requests.get(url, timeout=1)
+            if response.status_code == 200:
+                self.status_var.set(f"Parancs elküldve: returnTPList")
+                data = response.json()
+                self.dir_list = data["dir_list"]
+                reports = []
+                for report in self.dir_list:
+                    reports.append(f'{report["name"]}')
+                self.spect_form_row["report_list"].configure(values = reports)
+                self.spect_form_row["report_list"].set(reports[0])
                 self.first_send_initSmartSNR()
             else:
                 self.status_var.set(f"Hiba: {response.status_code}")
@@ -697,8 +752,8 @@ class RamfApp(ctk.CTk):
 
             # Spektrum adatok frissítése, ha "spectrum_array" létezik
             elif parsed_data.get("tune_mode") == 1:
-                spectrum_data = parsed_data.get("spectrum_array", [])
-                self.update_spectrum_chart(spectrum_data)
+                self.spectrum_data = parsed_data.get("spectrum_array", [])
+                self.update_spectrum_chart(self.spectrum_data)
                 self.angles_labels["alfa"]["var"].set(f'Alfa: {parsed_data.get("alfa", "N/A")}')
                 self.angles_labels["beta"]["var"].set(f'Beta: {parsed_data.get("beta", "N/A")}')
                 self.angles_labels["gamma"]["var"].set(f'Gamma: {parsed_data.get("gamma", "N/A")}')
@@ -714,7 +769,15 @@ class RamfApp(ctk.CTk):
                 self.version_thread = threading.Thread(target=self.get_version, daemon=True)
                 self.version_thread.start()
                 self.version_run = True
-    
+
+    def toplevel_chart_update(self, window):
+        """Folyamatosan frissíti a grafikont 1 másodpercenként új adatokkal"""
+        def update():
+            if window.winfo_exists():
+                window.update_chart(self.spectrum_data)
+                window.after(10, update)  # 1 másodpercenként frissítés
+        update()
+
     def update_spectrum_chart(self, spectrum_data):
         """Frissíti a matplotlib grafikont a kapott spektrum adatokkal."""
         x_values = list(range(len(spectrum_data)))  # 0-479 pont
@@ -747,15 +810,11 @@ class RamfApp(ctk.CTk):
         thread = threading.Thread(target=self.long_progress, daemon=True)
         thread.start()
 
-    def open_toplevel(self, form):
-        if form == "snr":
-            info_text = self.show_data(form)
-        elif form == "spect":
-            info_text = self.show_data(form)
+    def open_toplevel(self, title, call):
         if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
-            self.toplevel_window = ToplevelWindow(self, info_text)  # Helyesen adjuk át a master-t
+            self.toplevel_window = ToplevelWindow(self, title, call)  # Helyesen adjuk át a master-t
         else:
-            self.toplevel_window.update_text(info_text)  # Ha létezik az ablak, fókuszáljunk rá
+            self.toplevel_window.update_text(title, call)  # Ha létezik az ablak, fókuszáljunk rá
         self.toplevel_window.lift()
 
     def get_form_data_val(self, choice, fields):
