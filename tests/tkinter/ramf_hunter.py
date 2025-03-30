@@ -324,7 +324,9 @@ class RamfApp(ctk.CTk):
         self.tp_list = []
         self.sat_list = []
         self.dir_list = []
+        self.report_list = {}
         self.report_data = []
+        self.report_data_rssi = []
         self.version_run = False
         self.widget_scaling = 1
 
@@ -523,19 +525,24 @@ class RamfApp(ctk.CTk):
     
     def report_list_changed(self, elem):
         logging.info(f"# report list changed {elem}")
-        report_name = elem[:-4]
+        report_name = self.report_list[elem]
         # http://192.168.1.56/public?command=returnReport&report_name=e:/rpt_3_585E_2021-01-07_11_14_58.json
         url = f'http://{self.stb_ip}/public?command=returnReport&report_name=e:/{report_name}.json'
         try:
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
-                self.status_var.set(f"Parancs elküldve: returnReport")
+                self.status_var.set(f"Report lekérve: {report_name}")
                 self.report_data = response.json()
-                logging.info(self.report_data)
+                logging.info(f"Report lekérve: {report_name}")
+                logging.info(f'Report rssi: {self.process_report_data(self.report_data)}')
+                self.report_data_rssi = self.process_report_data(self.report_data)
             else:
                 self.status_var.set(f"Hiba: {response.status_code}")
         except requests.RequestException as e:
             self.status_var.set(f"Hálózati hiba: {str(e)}")
+    
+    def process_report_data(self, data):
+        return [common_param["rssi"] for common_param in data["common_param"]]
     
     def get_version(self):
         url = f"http://{self.stb_ip}/public?command=version"
@@ -592,6 +599,12 @@ class RamfApp(ctk.CTk):
         except requests.RequestException as e:
             self.status_var.set(f"Hálózati hiba: {str(e)}")
 
+    def make_new_report_name(self, name):
+        return name.replace("_",".")[4:-7]
+    
+    def json_report_name(self, name):
+        return name[:-4]
+
     def get_reportlist(self):
         url = f"http://{self.stb_ip}/mnt/flash/e/ls.json"
         try:
@@ -599,12 +612,12 @@ class RamfApp(ctk.CTk):
             if response.status_code == 200:
                 self.status_var.set(f"Parancs elküldve: returnTPList")
                 data = response.json()
-                self.dir_list = data["dir_list"]
-                reports = []
-                for report in self.dir_list:
-                    reports.append(f'{report["name"]}')
-                self.spect_form_row["report_list"].configure(values = reports)
-                self.spect_form_row["report_list"].set(reports[0])
+
+                self.report_list = {self.make_new_report_name(report["name"]): self.json_report_name(report["name"]) for report in data["dir_list"]}
+                new_keys = list(self.report_list.keys())
+
+                self.spect_form_row["report_list"].configure(values=new_keys)
+                self.spect_form_row["report_list"].set(new_keys[0])
                 self.first_send_initSmartSNR()
             else:
                 self.status_var.set(f"Hiba: {response.status_code}")
@@ -774,7 +787,7 @@ class RamfApp(ctk.CTk):
         """Folyamatosan frissíti a grafikont 1 másodpercenként új adatokkal"""
         def update():
             if window.winfo_exists():
-                window.update_chart(self.spectrum_data)
+                window.update_chart(self.report_data_rssi)
                 window.after(10, update)  # 1 másodpercenként frissítés
         update()
 
