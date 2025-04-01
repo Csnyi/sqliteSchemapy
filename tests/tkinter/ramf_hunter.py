@@ -2,17 +2,18 @@ import requests
 import threading
 import tkinter as tk
 import customtkinter as ctk
+from CTkMessagebox import CTkMessagebox
 import json
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from sseclient import SSEClient
-import datetime
+from ramf_variables import *
 import time
 import platform
 import re
 import logging
-
-import random
 
 # Alapértelmezett beállítások: naplófájlba mentés és konzolra is ír
 logging.basicConfig(
@@ -28,136 +29,6 @@ logging.info("========= Program indítása =========")
 # ctk
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
 ctk.set_default_color_theme("tkthemes/breeze.json")  # Themes: "blue" (standard), "green", "dark-blue"
-
-appWidth, appHeight = 960, 540
-
-def wpos_center(window_width, window_height, root):
-    """Kiszámolja az ablak középre helyezéséhez szükséges koordinátákat."""
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    pos_x = (screen_width // 2) - (window_width // 2)
-    pos_y = (screen_height // 2) - (window_height // 2)
-    return f"{window_width}x{window_height}+{pos_x}+{pos_y}"
-
-
-SNR_FIELDS = [
-    {
-        'name': 'freq',
-        'title': 'Frequency:',
-        'type': 'str'
-    },{
-        'name': 'lo',
-        'title': 'Local Oscillator:',
-        'type': 'list',
-        'data': {
-            "5150": 5150, 
-            "5750": 5750, 
-            "5950": 5950, 
-            "9750": 9750, 
-            "10000": 10000, 
-            "10050": 10050, 
-            "10450": 10450, 
-            "10600": 10600, 
-            "10700": 10700, 
-            "10750": 10750, 
-            "11250": 11250, 
-            "11300": 11300
-        }
-    },{
-        'name': 'sr',
-        'title': 'Symbol rate:',
-        'type': 'str'
-    },{
-        'name': 'pol',
-        'title': 'Polarization:',
-        'type': 'list',
-        'data': {"Horizontal": 0, "Vertical": 1}
-    },{
-        'name': 'tone',
-        'title': 'Tone:',
-        'type': 'list',
-        'data': {"Off": 0, "On": 1}
-    },{
-        'name': 'diseqc_hex',
-        'title': 'DISEqC Port - Command:',
-        'type': 'list',
-        'data': {
-            "Off": "",
-            "--- 1.0, up to 4 ports ---": "",
-            "01 - E01038F0": "E01038F0",
-            "02 - E01038F4": "E01038F4",
-            "03 - E01038F8": "E01038F8",
-            "04 - E01038FC": "E01038FC",
-            "--- 1.1, up to 16 ports ---": "",
-            "--- UNCOMMITTED ---": "",
-            "01 - E01039F0": "E01039F0",
-            "02 - E01039F1": "E01039F1",
-            "03 - E01039F2": "E01039F2",
-            "04 - E01039F3": "E01039F3",
-            "05 - E01039F4": "E01039F4",
-            "06 - E01039F5": "E01039F5",
-            "07 - E01039F6": "E01039F6",
-            "08 - E01039F7": "E01039F7",
-            "--- COMMITTED ---": "",
-            "09 - E01039F8": "E01039F8",
-            "10 - E01039F9": "E01039F9",
-            "11 - E01039FA": "E01039FA",
-            "12 - E01039FB": "E01039FB",
-            "13 - E01039FC": "E01039FC",
-            "14 - E01039FD": "E01039FD",
-            "15 - E01039FE": "E01039FE",
-            "16 - E01039FF": "E01039FF"
-        }
-    },{
-        'name': 'smart_lnb_enabled',
-        'title': '3D converter polling:',
-        'type': 'list',
-        'data': {"Disabled": 0, "Enabled": 1}
-    }
-]
-
-SPECT_FIELDS = [
-    {
-        'name': 'sat_list',
-        'title': 'Satellite List:',
-        'type': 'list',
-        'data': {}
-    },{
-        'name': 'tp_list',
-        'title': 'TP List:',
-        'type': 'list',
-        'data': {}
-    },{
-        'name': 'report_list',
-        'title': 'Report List:',
-        'type': 'list',
-        'data': {}
-    }
-]
-
-VER_LABELS_FIELDS = [
-    "name",
-    "serial",
-    "stb"
-]
-
-SNR_LABELS_FIELDS = [
-    "snr",
-    "lm_snr",
-    "carrier_offset",
-    "lpg",
-    "lnb_current",
-    "lnb_voltage",
-    "psu_voltage"
-]
-
-SPECT_LABELS_FIELDS = [
-    "alfa",
-    "beta",
-    "gamma"
-]
-
-scaling_values = ["80%", "90%", "100%", "110%", "120%", "150%"]
 
 class IPInputDialog(ctk.CTkToplevel):
     def __init__(self, master=None, title="IP Cím Bekérése"):
@@ -249,7 +120,7 @@ def ask_for_ip():
         dialog.wait_window()  # Megvárjuk, míg bezáródik
 
         if not dialog.result:  
-            logging.info("❌ Nincs IP megadva, kilépés...")
+            logging.info("Nincs IP megadva, kilépés...")
             app.destroy()  # Kilépünk az egész alkalmazásból
             return None  
 
@@ -268,7 +139,8 @@ def network_check(ip):
         pass 
         
     logging.error(f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
-    tk.messagebox.showerror(title="Error", message=f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
+    CTkMessagebox(title="Error", message="Something went wrong!!!", icon="cancel")
+    # tk.messagebox.showerror(title="Error", message=f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
     return False
 
 class ToplevelWindow(ctk.CTkToplevel):
@@ -310,6 +182,10 @@ class ToplevelWindow(ctk.CTkToplevel):
         self.ax.autoscale_view()  # Automatikusan méretezi a grafikont
 
         self.canvas.draw()  # Frissíti a rajzot
+
+    def update_text(self, new_text):
+        """Szöveg frissítése az ablakban"""
+        self.label.configure(text=new_text)
 
 class RamfApp(ctk.CTk):
     def __init__(self):
@@ -377,10 +253,10 @@ class RamfApp(ctk.CTk):
         self.appearance_mode_label.grid(row=sidebar_bottom_row_index+1, column=0, padx=20, pady=(10, 0))
         self.appearance_mode_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=["Light", "Dark", "System"], command=self.change_appearance_mode_event)
         self.appearance_mode_optionemenu.grid(row=sidebar_bottom_row_index+2, column=0, padx=20, pady=(10, 10))
-        ## self.scaling_label = ctk.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
-        ## self.scaling_label.grid(row=sidebar_bottom_row_index+3, column=0, padx=20, pady=(10, 0))
-        ## self.scaling_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=scaling_values, command=self.change_scaling_event)
-        ## self.scaling_optionemenu.grid(row=sidebar_bottom_row_index+4, column=0, padx=20, pady=(10, 20))
+        self.scaling_label = ctk.CTkLabel(self.sidebar_frame, text="UI Scaling:", anchor="w")
+        self.scaling_label.grid(row=sidebar_bottom_row_index+3, column=0, padx=20, pady=(10, 0))
+        self.scaling_optionemenu = ctk.CTkOptionMenu(self.sidebar_frame, values=SCALING_VALUES, command=self.change_scaling_event)
+        self.scaling_optionemenu.grid(row=sidebar_bottom_row_index+4, column=0, padx=20, pady=(10, 20))
         
         # --- create main bottom label (info row)
 
@@ -439,7 +315,7 @@ class RamfApp(ctk.CTk):
             # Spect Button
         self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Report", command=lambda: self.open_input_dialog_event(self.spect_form_row["sat_list"]))
         self.spect_button_create_report.grid(row=2, column=0, padx=20, pady=20, sticky="nsew")
-        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("spect", self.toplevel_chart_update))
+        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("RSSI", self.toplevel_chart_update))
         self.spect_button_open_report.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
         
             ## --- SNR Report Form
@@ -484,7 +360,7 @@ class RamfApp(ctk.CTk):
         # --- set default values
 
         self.appearance_mode_optionemenu.set("Dark")
-        ## self.scaling_optionemenu.set("100%")
+        self.scaling_optionemenu.set("100%")
         self.progressbar_1.configure(mode="indeterminate")
         self.progressbar_frame.grid_forget()
 
@@ -827,7 +703,7 @@ class RamfApp(ctk.CTk):
         if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
             self.toplevel_window = ToplevelWindow(self, title, call)  # Helyesen adjuk át a master-t
         else:
-            self.toplevel_window.update_text(title, call)  # Ha létezik az ablak, fókuszáljunk rá
+            self.toplevel_window.update_text(title)  # Ha létezik az ablak, fókuszáljunk rá
         self.toplevel_window.lift()
 
     def get_form_data_val(self, choice, fields):
@@ -889,9 +765,9 @@ class RamfApp(ctk.CTk):
     def change_appearance_mode_event(self, new_appearance_mode: str):
         ctk.set_appearance_mode(new_appearance_mode)
 
-    ## def change_scaling_event(self, new_scaling: str):
-    ##     new_scaling_float = int(new_scaling.replace("%", "")) / 100
-    ##     ctk.set_widget_scaling(new_scaling_float)
+    def change_scaling_event(self, new_scaling: str):
+        new_scaling_float = int(new_scaling.replace("%", "")) / 100
+        ctk.set_widget_scaling(new_scaling_float)
 
     def togle_pb(self):
         if self.progressbar_frame.winfo_ismapped():
@@ -941,5 +817,5 @@ if __name__ == "__main__":
         app.start_sse()
         app.mainloop()
     else:
-        logging.info("🚪 Kilépés...")
+        logging.info("Kilépés...")
     
