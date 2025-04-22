@@ -1,6 +1,7 @@
 import requests
 import threading
 import tkinter as tk
+from tkinter import messagebox
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
 import json
@@ -113,6 +114,17 @@ class IPInputDialog(ctk.CTkToplevel):
         self.result = ip  # Ha sikeres, elmentjük az eredményt
         self.destroy()  # Ablak bezárása
 
+def save_settings_ip(ip):
+    with open("settings.json", "w") as f:
+        json.dump({"ip": ip}, f)
+
+def load_settings_ip():
+    try:
+        with open("settings.json") as f:
+            return json.load(f).get("ip", "")
+    except FileNotFoundError:
+        return ""
+
 def ask_for_ip():
     """IP-cím bekérése a felhasználótól, amíg nem sikerül kapcsolódni."""
     while True:
@@ -123,6 +135,8 @@ def ask_for_ip():
             logging.info("Nincs IP megadva, kilépés...")
             app.destroy()  # Kilépünk az egész alkalmazásból
             return None  
+
+        save_settings_ip(dialog.result)
 
         return dialog.result  # Visszaadja az érvényes IP-t
 
@@ -139,8 +153,8 @@ def network_check(ip):
         pass 
         
     logging.error(f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
-    CTkMessagebox(title="Error", message="Something went wrong!!!", icon="cancel")
-    # tk.messagebox.showerror(title="Error", message=f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
+    # CTkMessagebox(title="Error", message="Something went wrong!!!", icon="cancel")
+    tk.messagebox.showerror(title="Error", message=f"Hálózati hiba {ip}-n, próbáljon másik IP-t!")
     return False
 
 class ToplevelWindow(ctk.CTkToplevel):
@@ -585,7 +599,7 @@ class RamfApp(ctk.CTk):
         self.event_thread.start()
 
     def event_close(self, sec=0):
-        """Lezárja az SSE kapcsolatot és visszaállítja az STB-t standard módba."""
+        """ Lezárja az SSE kapcsolatot és visszaállítja az STB-t standard módba. """
         self.running = False  # SSE futás leállítása
 
         # SSE kapcsolat tényleges lezárása
@@ -611,7 +625,7 @@ class RamfApp(ctk.CTk):
         if self.event_thread:
             self.event_thread = None
 
-        time.sleep(sec)  # Várunk, hogy az STB feldolgozza a bontást
+        time.sleep(sec)  # Várunk, hogy az STB feldolgozza a bontást 
 
     def process_sse_data(self, data):
         """GUI frissítése az SSE események alapján."""
@@ -680,9 +694,13 @@ class RamfApp(ctk.CTk):
         self.canvas.draw()  # Frissíti a rajzot
         
     def on_close(self):
-        logging.info("GUI bezárása... SSE kapcsolat leállítása")
-        self.event_close()
-        self.destroy()  # Ablak bezárása
+        if messagebox.askyesno("Kilépés", "Biztosan kilépsz?"):
+            logging.info("GUI bezárása... SSE kapcsolat leállítása")
+            plt.close('all')
+            self.event_close()
+            self.destroy()
+        else:
+            logging.info("Kilépés megszakítva")
     
     # ====== sse ==== end
 
@@ -808,7 +826,13 @@ if __name__ == "__main__":
     app = RamfApp()
     app.withdraw()  # A főablak elrejtése
 
-    ip = ask_for_ip()
+    try:
+        ip = load_settings_ip()
+        if not ip or not network_check(ip):
+            ip = ask_for_ip()
+    except Exception as e:
+        logging.warning(f"Hiba történt az IP betöltésnél vagy ellenőrzésnél: {e}")
+        ip = ask_for_ip()
 
     if ip:
         app.stb_ip = ip
