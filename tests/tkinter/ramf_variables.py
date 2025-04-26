@@ -10,6 +10,20 @@ def wpos_center(window_width, window_height, root):
     return f"{window_width}x{window_height}+{pos_x}+{pos_y}"
 
 
+PLAY_FIELDS = [
+    {
+        "name": "play_list",
+        "title": "Play List",
+        "type": "list",
+        "data": {}
+    },{
+        "name": "ch_list",
+        "title": "Channel List",
+        "type": "list",
+        "data": {}
+    }
+]
+
 SNR_FIELDS = [
     {
         'name': 'freq',
@@ -125,6 +139,10 @@ SPECT_LABELS_FIELDS = [
     "alfa",
     "beta",
     "gamma"
+]
+
+REPORT_LABELS_FIELDS = [
+    "date"
 ]
 
 SCALING_VALUES = ["80%", "90%", "100%", "110%", "120%", "150%"]

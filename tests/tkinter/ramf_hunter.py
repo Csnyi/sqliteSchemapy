@@ -160,46 +160,16 @@ def network_check(ip):
 class ToplevelWindow(ctk.CTkToplevel):
     def __init__(self, master, title, call, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
-        self.title("Sent data")
+        self.title(title)
 
-        self.geometry(wpos_center(300, 350, self))
+        self.geometry(wpos_center(640, 480, self))
 
-        self.label = ctk.CTkLabel(self, text=title, justify="left")
-        self.label.pack(padx=5, pady=5, fill="both", expand=True)
-
-            # Matplotlib ábra létrehozása
-        self.fig, self.ax = plt.subplots(figsize=(6, 2))
-        self.ax.set_title("Spektrum Analízis")
-        self.ax.set_xlabel("Frekvencia pontok")
-        self.ax.set_ylabel("Jelszint (dB)")
-        self.line, = self.ax.plot([], [], "b-", lw=1)
-
-            # Matplotlib integrálása a Tkinter ablakba
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.pack(padx=20, pady=20, fill="both", expand=True)
-        
         self.button = ctk.CTkButton(self, text="Exit", command=self.destroy)
         self.button.pack(padx=10, pady=10)
 
         if callable(call):  
             call(self)
 
-    def update_chart(self, data):
-        """Frissíti a matplotlib grafikont a kapott adatokkal."""
-        x_values = list(range(len(data))) 
-        y_values = data  
-
-        self.line.set_xdata(x_values)
-        self.line.set_ydata(y_values)
-        self.ax.relim()  # Újraértékeli a tengelyeket
-        self.ax.autoscale_view()  # Automatikusan méretezi a grafikont
-
-        self.canvas.draw()  # Frissíti a rajzot
-
-    def update_text(self, new_text):
-        """Szöveg frissítése az ablakban"""
-        self.label.configure(text=new_text)
 
 class RamfApp(ctk.CTk):
     def __init__(self):
@@ -215,6 +185,8 @@ class RamfApp(ctk.CTk):
         self.sat_list = []
         self.dir_list = []
         self.report_list = {}
+        self.play_list = {}
+        self.ch_list = {}
         self.report_data = []
         self.report_data_rssi = []
         self.version_run = False
@@ -250,10 +222,10 @@ class RamfApp(ctk.CTk):
         self.version_labels = self.create_labels(self.ver_lab_frame, VER_LABELS_FIELDS)
 
             # buttons top
-        self.sidebar_button_propert = ctk.CTkButton(self.sidebar_frame, text="Event start", command=self.restart_sse)
-        self.sidebar_button_propert.grid(row=4, column=0, padx=20, pady=10)
-        self.sidebar_button_toggle = ctk.CTkButton(self.sidebar_frame, text="Event close", command=lambda: self.event_close(2))
-        self.sidebar_button_toggle.grid(row=5, column=0, padx=20, pady=10)
+        self.sidebar_button_progress = ctk.CTkButton(self.sidebar_frame, text="Progress Bar", command=self.start_progress)
+        self.sidebar_button_progress.grid(row=4, column=0, padx=20, pady=10)
+        self.sidebar_button_info = ctk.CTkButton(self.sidebar_frame, text="Call Info", command=self.call_info)
+        self.sidebar_button_info.grid(row=5, column=0, padx=20, pady=10)
         self.sidebar_button_exit = ctk.CTkButton(self.sidebar_frame, text="Exit", command=self.on_close)
         self.sidebar_button_exit.grid(row=6, column=0, padx=20, pady=10)
 
@@ -329,8 +301,10 @@ class RamfApp(ctk.CTk):
             # Spect Button
         self.spect_button_create_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Report", command=lambda: self.open_input_dialog_event(self.spect_form_row["sat_list"]))
         self.spect_button_create_report.grid(row=2, column=0, padx=20, pady=20, sticky="nsew")
-        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("RSSI", self.toplevel_chart_update))
-        self.spect_button_open_report.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
+        self.spect_button_open_groups = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Channel Groups", command=lambda: self.open_toplevel("Channel Groups", self.toplevel_groups_update))
+        self.spect_button_open_groups.grid(row=3, column=0, padx=20, pady=20, sticky="nsew")
+        self.spect_button_open_report = ctk.CTkButton(self.tabview.tab("Spectrum Report"), text="Open Report", command=lambda: self.open_toplevel("RSSI", self.toplevel_report_update))
+        self.spect_button_open_report.grid(row=4, column=0, padx=20, pady=20, sticky="nsew")
         
             ## --- SNR Report Form
 
@@ -383,6 +357,53 @@ class RamfApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
     
     # ====== SSE ====== start
+
+    def get_play_list(self):
+        url = f"http://{self.stb_ip}/public?command=returnGroupes"
+        try:
+            response = requests.get(url, timeout=1)
+            if response.status_code == 200:
+                self.status_var.set(f"Parancs elküldve: returnGroupes")
+                data = response.json()
+                self.play_list = {name: filename for name, filename in data["groupes"]}
+                play_names = list(self.play_list.keys())
+                self.play_form_row["play_list"].configure(values = play_names)
+                self.play_form_row["play_list"].set(play_names[0])
+                self.get_ch_list(self.play_list[play_names[0]])
+            else:
+                logging.error(f"Hiba: {response.status_code}")
+        except requests.RequestException as e:
+            logging.error(f"Hálózati hiba: {str(e)}")
+    
+    def play_list_changed(self, elem):
+        try:
+            filename = str(self.play_list[elem])
+            self.get_ch_list(filename)
+            logging.info(f"filename: {filename}")
+        except Exception as e:
+            logging.error(f"Hiba 422.sorqq: {e}")
+    
+    def get_ch_list(self, chlist):
+        url = f"http://{self.stb_ip}/stream/{chlist}"
+        try:
+            r = requests.get(url, timeout=1)
+            lines = r.text.splitlines()
+            # párosával keressük: EXTINF -> URL
+            for i in range(len(lines) - 1):
+                if lines[i].startswith("#EXTINF"):
+                    name = lines[i].split(",")[-1].strip()
+                    url = lines[i + 1].strip()
+                    self.ch_list[name] = url
+            names = list(self.ch_list.keys())
+            logging.info(f"names: {self.ch_list[names[0]]}")
+            self.play_form_row["ch_list"].configure(values = names)
+            self.play_form_row["ch_list"].set(names[0])
+
+        except Exception as e:
+            logging.error(f"Hiba az m3u fájl beolvasásakor:\n{e}")
+
+    def call_info(self):
+        ...
         
     def sat_list_changed(self, elem):
         """ Handle the satellite list changed event """
@@ -424,7 +445,6 @@ class RamfApp(ctk.CTk):
                 self.status_var.set(f"Report lekérve: {report_name}")
                 self.report_data = response.json()
                 logging.info(f"Report lekérve: {report_name}")
-                logging.info(f'Report rssi: {self.process_report_data(self.report_data)}')
                 self.report_data_rssi = self.process_report_data(self.report_data)
             else:
                 self.status_var.set(f"Hiba: {response.status_code}")
@@ -673,14 +693,6 @@ class RamfApp(ctk.CTk):
                 self.version_thread.start()
                 self.version_run = True
 
-    def toplevel_chart_update(self, window):
-        """Folyamatosan frissíti a grafikont 1 másodpercenként új adatokkal"""
-        def update():
-            if window.winfo_exists():
-                window.update_chart(self.report_data_rssi)
-                window.after(10, update)  # 1 másodpercenként frissítés
-        update()
-
     def update_spectrum_chart(self, spectrum_data):
         """Frissíti a matplotlib grafikont a kapott spektrum adatokkal."""
         x_values = list(range(len(spectrum_data)))  # 0-479 pont
@@ -694,10 +706,11 @@ class RamfApp(ctk.CTk):
         self.canvas.draw()  # Frissíti a rajzot
         
     def on_close(self):
-        if messagebox.askyesno("Kilépés", "Biztosan kilépsz?"):
+        if messagebox.askyesno("Exit?", "Are you sure you want to exit?"):
             logging.info("GUI bezárása... SSE kapcsolat leállítása")
             plt.close('all')
             self.event_close()
+            time.sleep(1)
             self.destroy()
         else:
             logging.info("Kilépés megszakítva")
@@ -721,8 +734,47 @@ class RamfApp(ctk.CTk):
         if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
             self.toplevel_window = ToplevelWindow(self, title, call)  # Helyesen adjuk át a master-t
         else:
-            self.toplevel_window.update_text(title)  # Ha létezik az ablak, fókuszáljunk rá
-        self.toplevel_window.lift()
+            self.toplevel_window.lift()  # Ha létezik az ablak, fókuszáljunk rá
+
+    def toplevel_report_update(self, window):
+        """Folyamatosan frissíti a grafikont 1 másodpercenként új adatokkal"""
+        def update_chart(window, data):
+            """Frissíti a matplotlib grafikont a kapott adatokkal."""
+            x_values = list(range(len(data))) 
+            y_values = data  
+
+            window.line.set_xdata(x_values)
+            window.line.set_ydata(y_values)
+            window.ax.relim()  # Újraértékeli a tengelyeket
+            window.ax.autoscale_view()  # Automatikusan méretezi a grafikont
+
+            window.canvas.draw()  # Frissíti a rajzot
+        
+        if window.winfo_exists():
+
+                # Matplotlib ábra létrehozása
+            window.fig, window.ax = plt.subplots(figsize=(6, 2))
+            window.ax.set_title("Spektrum Analízis")
+            window.ax.set_xlabel("Frekvencia pontok")
+            window.ax.set_ylabel("Jelszint (dB)")
+            window.line, = window.ax.plot([], [], "b-", lw=1)
+
+                # Matplotlib integrálása a Tkinter ablakba
+            window.canvas = FigureCanvasTkAgg(window.fig, master=window)
+            window.canvas_widget = window.canvas.get_tk_widget()
+            window.canvas_widget.pack(padx=20, pady=20, fill="both", expand=True)
+            
+            update_chart(window, self.report_data_rssi)
+
+    def toplevel_groups_update(self, window):
+        """Folyamatosan frissíti a grafikont 1 másodpercenként új adatokkal"""
+        if window.winfo_exists():
+            self.play_frame = ctk.CTkFrame(window)
+            self.play_frame.pack()
+            self.play_form_row = self.create_form(self.play_frame, PLAY_FIELDS)
+            self.get_play_list()
+            self.play_form_row["play_list"].configure(command=self.play_list_changed)
+
 
     def get_form_data_val(self, choice, fields):
         return  next(field["data"][choice] for field in fields if choice in list(field.get("data", {}).keys()))
