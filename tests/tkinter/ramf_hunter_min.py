@@ -424,6 +424,8 @@ class RamfApp(ctk.CTk):
         logging.info(f"# report list changed {elem}")
         report_name = self.report_list[elem]
         self.get_report(report_name)
+        if self.toplevel_window:
+            self.toplevel_update_report(self.toplevel_window)
         
     def process_report_data(self, data):
         return [common_param["rssi"] for common_param in data["common_param"]]
@@ -747,6 +749,7 @@ class RamfApp(ctk.CTk):
             choice = self.spect_form_row["report_list"].get()
             report_name = self.report_list[choice]
             self.get_report(report_name)
+            self.report_labels["date"]["var"].set(f'Date: {self.report_data["date"]}')
             logging.info(f"toplevel date: {self.report_data['date']}")
     
     def get_form_data_val(self, choice, fields):
