@@ -3,3 +3,4 @@ bank/
 **/__pycache__/
 **/bank/
 app.log
+ramf_hunter_min.log
